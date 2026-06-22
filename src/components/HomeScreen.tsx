@@ -5,14 +5,31 @@ import { useRouter } from 'next/navigation'
 import { getOperator, clearOperator } from '@/lib/operator'
 import UserSelectionScreen from './UserSelectionScreen'
 
+type RetourenDraft = { step: number; trackingNumber: string; customerName?: string; orderNumber?: string }
+
 export default function HomeScreen() {
   const router = useRouter()
   const [operator, setOperator] = useState<string | null>(null)
   const [checked, setChecked] = useState(false)
+  const [retourenDraft, setRetourenDraft] = useState<RetourenDraft | null>(null)
 
   useEffect(() => {
     setOperator(getOperator())
     setChecked(true)
+    try {
+      const raw = localStorage.getItem('retouren_draft')
+      if (raw) {
+        const d = JSON.parse(raw)
+        if (d.step > 1 || d.trackingNumber) {
+          setRetourenDraft({
+            step: d.step ?? 1,
+            trackingNumber: d.trackingNumber ?? '',
+            customerName: d.selectedOrder?.customerName,
+            orderNumber: d.selectedOrder?.orderNumber,
+          })
+        }
+      }
+    } catch { /* ignore */ }
   }, [])
 
   if (!checked) return null
@@ -65,6 +82,34 @@ export default function HomeScreen() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%', maxWidth: 480 }}>
+          {/* Draft banner */}
+          {retourenDraft && (
+            <div style={{ border: '1.5px solid var(--gold-border)', background: 'var(--gold-bg)', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gold-dark)', marginBottom: 2 }}>Nicht abgeschlossen</div>
+                <div style={{ fontSize: 12, color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {retourenDraft.customerName
+                    ? `${retourenDraft.customerName} · #${retourenDraft.orderNumber} · Schritt ${retourenDraft.step}`
+                    : `Schritt ${retourenDraft.step}${retourenDraft.trackingNumber ? ` · ${retourenDraft.trackingNumber}` : ''}`
+                  }
+                </div>
+              </div>
+              <button
+                className="btn btn-secondary"
+                style={{ fontSize: 13, padding: '7px 12px', flexShrink: 0 }}
+                onClick={() => router.push('/retouren')}
+              >
+                Weiter →
+              </button>
+              <button
+                onClick={() => { localStorage.removeItem('retouren_draft'); setRetourenDraft(null) }}
+                style={{ all: 'unset', cursor: 'pointer', fontSize: 22, color: 'var(--text-muted)', lineHeight: 1, padding: '0 4px', flexShrink: 0 }}
+              >
+                ×
+              </button>
+            </div>
+          )}
+
           {/* Retouren */}
           <button
             onClick={() => router.push('/retouren')}

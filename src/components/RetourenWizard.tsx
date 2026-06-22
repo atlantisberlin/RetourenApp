@@ -36,6 +36,7 @@ const REASONS: { value: ReturnReason; label: string }[] = [
 ]
 
 const STEP_LABELS = ['PAKET', 'ÖFFNEN', 'ARTIKEL', 'SENDEN']
+const DRAFT_KEY = 'retouren_draft'
 
 export default function RetourenWizard() {
   const router = useRouter()
@@ -70,24 +71,67 @@ export default function RetourenWizard() {
   const fileRef = useRef<HTMLInputElement>(null)
   const photoTargetRef = useRef<'label' | 'exterior' | 'slip' | number>('label')
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingArticlesRef = useRef<Array<Omit<ArticleCapture, 'photo'>> | null>(null)
 
+  // Load draft + operator on mount
   useEffect(() => {
     setOperator(getOperator())
     setOperatorChecked(true)
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY)
+      if (raw) {
+        const d = JSON.parse(raw)
+        if (d.step > 1 || d.trackingNumber) {
+          if (d.trackingNumber) setTrackingNumber(d.trackingNumber)
+          if (d.step) setStep(d.step)
+          if (d.notes) setNotes(d.notes)
+          if (d.selectedOrder) {
+            pendingArticlesRef.current = d.articles ?? null
+            setSelectedOrder(d.selectedOrder)
+          }
+        }
+      }
+    } catch { /* ignore */ }
   }, [])
 
+  // Rebuild articles when order is selected; merge saved status if restoring draft
   useEffect(() => {
     if (!selectedOrder) { setArticles([]); return }
-    setArticles(selectedOrder.items.map((item: OrderItem) => ({
+    const rebuilt = selectedOrder.items.map((item: OrderItem) => ({
       itemId: item.id,
       productName: item.productName,
       orderedQty: item.quantity,
-      returned: null,
-      condition: null,
-      reason: null,
-      photo: null,
-    })))
+      returned: null as boolean | null,
+      condition: null as string | null,
+      reason: null as string | null,
+      photo: null as Photo | null,
+    }))
+    if (pendingArticlesRef.current) {
+      const saved = pendingArticlesRef.current
+      pendingArticlesRef.current = null
+      setArticles(rebuilt.map(a => {
+        const s = saved.find(x => x.itemId === a.itemId)
+        return s ? { ...a, returned: s.returned, condition: s.condition, reason: s.reason } : a
+      }))
+    } else {
+      setArticles(rebuilt)
+    }
   }, [selectedOrder])
+
+  // Save draft whenever meaningful state changes (photos excluded — too large)
+  useEffect(() => {
+    if (!trackingNumber && !selectedOrder && step === 1) return
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        step,
+        trackingNumber,
+        selectedOrder,
+        articles: articles.map(({ photo: _p, ...rest }) => rest),
+        notes,
+        savedAt: new Date().toISOString(),
+      }))
+    } catch { /* ignore */ }
+  }, [step, trackingNumber, selectedOrder, articles, notes])
 
   const isStep1Valid = trackingNumber.trim().length > 3
   const isStep2Valid = selectedOrder !== null
@@ -104,8 +148,12 @@ export default function RetourenWizard() {
 
   const handleBack = () => {
     refreshActivity()
-    if (step === 1) router.push('/')
-    else setStep(step - 1)
+    if (step === 1) {
+      localStorage.removeItem(DRAFT_KEY)
+      router.push('/')
+    } else {
+      setStep(step - 1)
+    }
   }
 
   const capturePhoto = (target: 'label' | 'exterior' | 'slip' | number) => {
@@ -179,6 +227,7 @@ export default function RetourenWizard() {
       const res = await fetch('/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Fehler beim Senden')
+      localStorage.removeItem(DRAFT_KEY)
       addToHistory({
         orderId: selectedOrder.id,
         orderNumber: selectedOrder.orderNumber,
@@ -226,6 +275,7 @@ export default function RetourenWizard() {
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)', marginBottom: 32 }}>Task-ID: {taskId}</div>
         )}
         <button className="btn btn-primary btn-lg btn-full" style={{ maxWidth: 320, marginBottom: 12 }} onClick={() => {
+          localStorage.removeItem(DRAFT_KEY)
           setStep(1); setTrackingNumber(''); setLabelPhoto(null); setExteriorPhoto(null); setSlipPhoto(null)
           setSearchQuery(''); setSearchResults([]); setSelectedOrder(null); setArticles([])
           setNotes(''); setSubmitted(false); setTaskId(null); setError(null)
