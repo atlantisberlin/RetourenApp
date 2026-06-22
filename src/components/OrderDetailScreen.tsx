@@ -1,7 +1,9 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import type { Order } from '@/lib/types'
+import { getCustomerHistory, type HistoryEntry } from '@/lib/history'
 
 const STATUS_LABELS: Record<string, string> = {
   '1': 'Ausstehend',
@@ -18,6 +20,13 @@ export default function OrderDetailScreen({
   order: Order
   mode: 'live' | 'demo'
 }) {
+  const [customerHistory, setCustomerHistory] = useState<HistoryEntry[]>([])
+  const [historyOpen, setHistoryOpen] = useState(false)
+
+  useEffect(() => {
+    setCustomerHistory(getCustomerHistory(order.customerNumber))
+  }, [order.customerNumber])
+
   return (
     <>
       <header className="page-header">
@@ -71,6 +80,37 @@ export default function OrderDetailScreen({
             <MetaRow label="Herkunft" value={order.source ?? 'Zentrallager'} />
           </div>
         </div>
+
+        {customerHistory.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <button
+              onClick={() => setHistoryOpen((o) => !o)}
+              style={{ all: 'unset', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 10, width: '100%' }}
+            >
+              <span style={{ fontSize: 13, color: 'var(--text-3)' }}>
+                {customerHistory.length} frühere {customerHistory.length === 1 ? 'Retoure' : 'Retouren'} · letzte am {new Date(customerHistory[0].submittedAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              </span>
+              <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>{historyOpen ? '▲' : '▼'}</span>
+            </button>
+            {historyOpen && (
+              <div style={{ border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 10px 10px', overflow: 'hidden' }}>
+                {customerHistory.slice(0, 3).map((entry, i) => (
+                  <div key={entry.id} style={{ padding: '12px 16px', borderTop: i > 0 ? '1px solid var(--border-2)' : undefined, background: 'var(--surface)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                      <span style={{ fontWeight: 500 }}>{new Date(entry.submittedAt).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                      <span style={{ color: 'var(--text-muted)' }}>{entry.operatorName} · {entry.itemCount} Pos.</span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {entry.items.map((item, j) => (
+                        <span key={j} style={{ fontSize: 11, color: 'var(--text-3)', background: 'var(--surface-3)', border: '1px solid var(--border-2)', borderRadius: 4, padding: '2px 6px' }}>{item.productName}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Articles */}
         <div className="section-title">

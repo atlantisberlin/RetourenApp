@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { ReturnCapture } from '@/lib/types'
 import { StepIndicator } from './FotosScreen'
+import { addToHistory } from '@/lib/history'
 
 const CONDITION_LABELS: Record<string, string> = {
   gut: 'Gut',
@@ -60,6 +61,21 @@ export default function ZusammenfassungScreen({ orderId }: { orderId: string }) 
       setMode(data.mode)
       setSubmitted(true)
       localStorage.removeItem('return_capture')
+      const returnedItems2 = capture.items.filter((i) => i.returned)
+      addToHistory({
+        orderId: capture.orderId,
+        orderNumber: capture.order.orderNumber,
+        customerName: capture.order.customerName,
+        customerNumber: capture.order.customerNumber,
+        operatorName: capture.operatorName,
+        submittedAt: new Date().toISOString(),
+        itemCount: returnedItems2.length,
+        items: returnedItems2.map((item) => {
+          const oi = capture.order.items.find((o) => o.id === item.itemId)
+          return { productName: oi?.productName ?? item.itemId, condition: item.condition, reason: item.reason, resolution: item.resolution }
+        }),
+        taskId: data.taskId ?? undefined,
+      })
     } catch (e) {
       setError(String(e))
     } finally {

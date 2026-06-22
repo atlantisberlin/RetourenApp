@@ -77,5 +77,38 @@ export async function POST(request: Request) {
   }
 
   const data = await res.json()
-  return Response.json({ success: true, mode: 'live', taskId: data.data?.gid })
+  const taskGid = data.data?.gid
+
+  // Upload photos as attachments if task was created and photos are present
+  if (taskGid && body.photos && body.photos.length > 0) {
+    for (let i = 0; i < body.photos.length; i++) {
+      const photo = body.photos[i]
+      try {
+        // Parse base64 data URL: "data:image/jpeg;base64,<data>"
+        const matches = photo.dataUrl.match(/^data:([^;]+);base64,(.+)$/)
+        if (!matches) continue
+        const mimeType = matches[1]
+        const base64Data = matches[2]
+        const buffer = Buffer.from(base64Data, 'base64')
+
+        const formData = new FormData()
+        const blob = new Blob([buffer], { type: mimeType })
+        const fileName = `${photo.type}-${i + 1}.jpg`
+        formData.append('file', blob, fileName)
+
+        const attachRes = await fetch(`https://app.asana.com/api/1.0/tasks/${taskGid}/attachments`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${asanaToken}` },
+          body: formData,
+        })
+        if (!attachRes.ok) {
+          console.error(`Foto-Upload fehlgeschlagen für ${fileName}:`, await attachRes.text())
+        }
+      } catch (err) {
+        console.error(`Fehler beim Upload von Foto ${i + 1}:`, err)
+      }
+    }
+  }
+
+  return Response.json({ success: true, mode: 'live', taskId: taskGid })
 }

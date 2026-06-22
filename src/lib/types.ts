@@ -49,6 +49,7 @@ export type ReturnCapture = {
   trackingNumber: string
   notes: string
   operatorName: string
+  photos?: Array<{ id: string; type: string; dataUrl: string; name: string }>
 }
 
 export type SearchResult = {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { Order, SearchResult } from '@/lib/types'
 import { getOperator, clearOperator, refreshActivity } from '@/lib/operator'
 import UserSelectionScreen from './UserSelectionScreen'
+import { getHistory } from '@/lib/history'
 
 const HINTS = ['Bestellnr.', 'Kundennr.', 'Rechnungsnr.', 'Name']
 
@@ -18,10 +19,18 @@ export default function SearchScreen() {
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [hasSearched, setHasSearched] = useState(false)
+  const [draft, setDraft] = useState<{ orderId: string; orderNumber: string; customerName: string } | null>(null)
 
   useEffect(() => {
     setOperatorState(getOperator())
     setOperatorChecked(true)
+    try {
+      const raw = localStorage.getItem('return_capture')
+      if (raw) {
+        const c = JSON.parse(raw)
+        if (c.orderId && c.order) setDraft({ orderId: c.orderId, orderNumber: c.order.orderNumber, customerName: c.order.customerName })
+      }
+    } catch {}
   }, [])
 
   const search = useCallback(
@@ -106,6 +115,16 @@ export default function SearchScreen() {
       </header>
 
       <div className="page-content" style={{ paddingTop: 32 }}>
+        {draft && (
+          <div style={{ border: '1.5px solid var(--gold-border)', background: 'var(--gold-bg)', borderRadius: 10, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gold-dark)', marginBottom: 2 }}>Nicht abgeschlossen</div>
+              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{draft.customerName} · #{draft.orderNumber}</div>
+            </div>
+            <button className="btn btn-secondary" style={{ fontSize: 13, padding: '8px 12px', flexShrink: 0 }} onClick={() => { refreshActivity(); router.push(`/order/${draft.orderId}/fotos`) }}>Weiter →</button>
+            <button onClick={() => { localStorage.removeItem('return_capture'); setDraft(null) }} style={{ all: 'unset', cursor: 'pointer', fontSize: 22, color: 'var(--text-muted)', lineHeight: 1, padding: '0 4px', flexShrink: 0 }}>×</button>
+          </div>
+        )}
         <div style={{ marginBottom: 28 }}>
           <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 6 }}>Retoure erfassen</h1>
           <p style={{ fontSize: 15, color: 'var(--text-3)', lineHeight: 1.5 }}>
@@ -183,6 +202,32 @@ export default function SearchScreen() {
             <p>Keine Bestellung gefunden für „{query}".</p>
           </div>
         )}
+
+        {!hasSearched && !isPending && (() => {
+          const recent = getHistory().slice(0, 5)
+          if (recent.length === 0) return null
+          return (
+            <div style={{ marginTop: 28 }}>
+              <div className="section-title" style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Zuletzt erfasst</span>
+                <button onClick={() => router.push('/statistik')} style={{ all: 'unset', cursor: 'pointer', fontSize: 12, color: 'var(--blue)', fontFamily: 'var(--font-mono)' }}>Statistik →</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {recent.map((entry) => (
+                  <div key={entry.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{entry.customerName}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>#{entry.orderNumber} · {entry.itemCount} Pos. · {entry.operatorName}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'right' }}>
+                      {new Date(entry.submittedAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
         {results.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

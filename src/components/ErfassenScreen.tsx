@@ -47,6 +47,7 @@ export default function ErfassenScreen({ order }: { order: Order }) {
   const [packageService, setPackageService] = useState('')
   const [trackingNumber, setTrackingNumber] = useState('')
   const [notes, setNotes] = useState('')
+  const [skipPackageWarning, setSkipPackageWarning] = useState(false)
 
   const returnedCount = captures.filter((c) => c.returned).length
 
@@ -54,7 +55,11 @@ export default function ErfassenScreen({ order }: { order: Order }) {
     setCaptures((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)))
   }
 
-  function handleContinue() {
+  function handleContinue(force = false) {
+    if (!force && packageService === '' && !skipPackageWarning) {
+      setSkipPackageWarning(true)
+      return
+    }
     refreshActivity()
     const capture = {
       orderId: order.id,
@@ -348,9 +353,16 @@ export default function ErfassenScreen({ order }: { order: Order }) {
           </div>
         )}
 
+        {skipPackageWarning && (
+          <div style={{ border: '1.5px solid var(--gold-border)', background: 'var(--gold-bg)', borderRadius: 10, padding: '12px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span style={{ fontSize: 14, color: 'var(--gold-dark)' }}>Kein Paketdienst ausgewählt — trotzdem weiter?</span>
+            <button className="btn btn-secondary" style={{ fontSize: 13, padding: '8px 12px', flexShrink: 0 }} onClick={() => handleContinue(true)}>Ja, weiter</button>
+          </div>
+        )}
+
         <button
           className="btn btn-primary btn-lg btn-full"
-          onClick={handleContinue}
+          onClick={() => handleContinue()}
           disabled={returnedCount === 0}
           style={{ marginBottom: 12, opacity: returnedCount === 0 ? 0.5 : 1 }}
         >
