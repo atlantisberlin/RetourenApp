@@ -31,7 +31,7 @@ export default function OrderDetailScreen({
     <>
       <header className="page-header">
         <Link
-          href="/"
+          href="/retouren"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -171,7 +171,7 @@ export default function OrderDetailScreen({
           </svg>
           Retoure erfassen
         </Link>
-        <Link href="/" className="btn btn-secondary btn-full" style={{ display: 'flex' }}>
+        <Link href="/retouren" className="btn btn-secondary btn-full" style={{ display: 'flex' }}>
           Andere Bestellung suchen
         </Link>
       </div>

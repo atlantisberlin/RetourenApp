@@ -1,5 +1,5 @@
-import SearchScreen from '@/components/SearchScreen'
+import HomeScreen from '@/components/HomeScreen'
 
 export default function Home() {
-  return <SearchScreen />
+  return <HomeScreen />
 }
