@@ -82,11 +82,17 @@ export default function SearchScreen() {
   return (
     <>
       <header className="page-header">
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-          Atlantis
-        </span>
+        <button
+          onClick={() => router.push('/')}
+          style={{ all: 'unset', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-3)', padding: '8px 4px' }}
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M11 14L6 9l5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span style={{ fontSize: 14 }}>Startseite</span>
+        </button>
         <div style={{ width: 1, height: 16, background: 'var(--border)' }} />
-        <span style={{ fontWeight: 600, fontSize: 15 }}>Retouren-App</span>
+        <span style={{ fontWeight: 600, fontSize: 15 }}>Retouren</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           {mode === 'demo' && <span className="badge badge-gold">Demo-Modus</span>}
           {mode === 'live' && <span className="badge badge-green">Zentrallager · Live</span>}
