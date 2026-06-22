@@ -29,3 +29,8 @@ export function addToHistory(entry: Omit<HistoryEntry, 'id'>): void {
 export function getCustomerHistory(customerNumber: string): HistoryEntry[] {
   return getHistory().filter((e) => e.customerNumber === customerNumber)
 }
+
+export function deleteFromHistory(id: string): void {
+  const history = getHistory().filter((e) => e.id !== id)
+  localStorage.setItem(KEY, JSON.stringify(history))
+}

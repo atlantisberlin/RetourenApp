@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { getHistory, type HistoryEntry } from '@/lib/history'
+import { getHistory, deleteFromHistory, type HistoryEntry } from '@/lib/history'
+import { getOperator } from '@/lib/operator'
 
 const REASON_LABELS: Record<string, string> = {
   gefaellt_nicht: 'Gefällt nicht',
@@ -18,10 +19,17 @@ const DAY_LABELS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
 export default function StatistikScreen() {
   const router = useRouter()
   const [history, setHistory] = useState<HistoryEntry[]>([])
+  const [isErik, setIsErik] = useState(false)
 
   useEffect(() => {
     setHistory(getHistory())
+    setIsErik(getOperator() === 'Erik')
   }, [])
+
+  function handleDelete(id: string) {
+    deleteFromHistory(id)
+    setHistory(getHistory())
+  }
 
   if (history.length === 0) {
     return (
@@ -201,6 +209,51 @@ export default function StatistikScreen() {
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'right' }}>
                     <div>Letzte:</div>
                     <div>{new Date(lastDate).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Verlauf verwalten — nur für Erik */}
+        {isErik && (
+          <>
+            <div className="section-title" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              Verlauf verwalten
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.08em', color: 'var(--text-muted)', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px' }}>
+                Admin
+              </span>
+            </div>
+            <div className="card-section" style={{ marginBottom: 28 }}>
+              {history.map((entry, i) => (
+                <div key={entry.id}>
+                  {i > 0 && <hr />}
+                  <div style={{ padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{entry.customerName}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                        #{entry.orderNumber} · {entry.operatorName} · {new Date(entry.submittedAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDelete(entry.id)}
+                      style={{
+                        all: 'unset', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        width: 32, height: 32, borderRadius: 8,
+                        border: '1px solid var(--red-border)',
+                        color: 'var(--red)', flexShrink: 0,
+                        transition: 'background 0.12s',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--red-bg)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      title="Eintrag löschen"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M2 3.5h10M5.5 3.5V2.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 .5.5v1M11 3.5l-.7 7.7a1 1 0 0 1-1 .8H4.7a1 1 0 0 1-1-.8L3 3.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
                   </div>
                 </div>
               ))}
