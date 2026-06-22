@@ -1,5 +1,5 @@
-import SearchScreen from '@/components/SearchScreen'
+import RetourenWizard from '@/components/RetourenWizard'
 
 export default function RetourenPage() {
-  return <SearchScreen />
+  return <RetourenWizard />
 }
