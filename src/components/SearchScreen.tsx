@@ -1,19 +1,28 @@
 'use client'
 
-import { useState, useTransition, useCallback } from 'react'
+import { useState, useTransition, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Order, SearchResult } from '@/lib/types'
+import { getOperator, clearOperator, refreshActivity } from '@/lib/operator'
+import UserSelectionScreen from './UserSelectionScreen'
 
 const HINTS = ['Bestellnr.', 'Kundennr.', 'Rechnungsnr.', 'Name']
 
 export default function SearchScreen() {
   const router = useRouter()
+  const [operator, setOperatorState] = useState<string | null>(null)
+  const [operatorChecked, setOperatorChecked] = useState(false)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Order[]>([])
   const [mode, setMode] = useState<'live' | 'demo' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [hasSearched, setHasSearched] = useState(false)
+
+  useEffect(() => {
+    setOperatorState(getOperator())
+    setOperatorChecked(true)
+  }, [])
 
   const search = useCallback(
     (q: string) => {
@@ -23,6 +32,7 @@ export default function SearchScreen() {
         return
       }
       setError(null)
+      refreshActivity()
       startTransition(async () => {
         try {
           const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`)
@@ -48,10 +58,16 @@ export default function SearchScreen() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setQuery(e.target.value)
+    refreshActivity()
     if (!e.target.value.trim()) {
       setResults([])
       setHasSearched(false)
     }
+  }
+
+  if (!operatorChecked) return null
+  if (!operator) {
+    return <UserSelectionScreen onSelect={(name) => setOperatorState(name)} />
   }
 
   return (
@@ -62,12 +78,31 @@ export default function SearchScreen() {
         </span>
         <div style={{ width: 1, height: 16, background: 'var(--border)' }} />
         <span style={{ fontWeight: 600, fontSize: 15 }}>Retouren-App</span>
-        {mode === 'demo' && (
-          <span className="badge badge-gold" style={{ marginLeft: 'auto' }}>Demo-Modus</span>
-        )}
-        {mode === 'live' && (
-          <span className="badge badge-green" style={{ marginLeft: 'auto' }}>Zentrallager · Live</span>
-        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {mode === 'demo' && <span className="badge badge-gold">Demo-Modus</span>}
+          {mode === 'live' && <span className="badge badge-green">Zentrallager · Live</span>}
+          <button
+            onClick={() => { clearOperator(); setOperatorState(null) }}
+            style={{
+              all: 'unset', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5,
+              background: 'var(--surface-3)', border: '1px solid var(--border)',
+              borderRadius: 100, padding: '4px 10px 4px 8px',
+              fontSize: 13, color: 'var(--text-2)',
+            }}
+          >
+            <span style={{
+              width: 20, height: 20, borderRadius: '50%',
+              background: 'var(--blue-bg)', border: '1px solid var(--blue-border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, fontWeight: 700, color: 'var(--blue)',
+              flexShrink: 0,
+            }}>
+              {operator[0]}
+            </span>
+            {operator}
+          </button>
+        </div>
       </header>
 
       <div className="page-content" style={{ paddingTop: 32 }}>

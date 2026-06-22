@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { Order, ReturnCondition, ReturnReason, ReturnResolution, ReturnItemCapture } from '@/lib/types'
+import { getOperator, refreshActivity } from '@/lib/operator'
 
 const CONDITIONS: { value: ReturnCondition; label: string }[] = [
   { value: 'gut', label: 'Gut' },
@@ -54,6 +55,7 @@ export default function ErfassenScreen({ order }: { order: Order }) {
   }
 
   function handleContinue() {
+    refreshActivity()
     const capture = {
       orderId: order.id,
       order,
@@ -61,6 +63,7 @@ export default function ErfassenScreen({ order }: { order: Order }) {
       packageService,
       trackingNumber,
       notes,
+      operatorName: getOperator() ?? 'Unbekannt',
     }
     localStorage.setItem('return_capture', JSON.stringify(capture))
     router.push(`/order/${order.id}/fotos`)

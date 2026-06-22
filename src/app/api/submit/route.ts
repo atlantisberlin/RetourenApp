@@ -40,6 +40,7 @@ export async function POST(request: Request) {
   })
 
   const description = [
+    `Bearbeitet von: ${body.operatorName}`,
     `Bestellnr.: ${body.order.orderNumber}`,
     `Kundennr.: ${body.order.customerNumber}`,
     `Kunde: ${body.order.customerName}`,

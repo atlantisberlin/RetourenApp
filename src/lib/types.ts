@@ -48,6 +48,7 @@ export type ReturnCapture = {
   packageService: string
   trackingNumber: string
   notes: string
+  operatorName: string
 }
 
 export type SearchResult = {
