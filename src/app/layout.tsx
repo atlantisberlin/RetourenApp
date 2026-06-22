@@ -2,13 +2,13 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Retouren-App · Atlantis',
-  description: 'Retouren erfassen und an Asana übergeben',
+  title: 'Atlantis Intern',
+  description: 'Retouren erfassen und Versand dokumentieren',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Retouren',
+    title: 'Atlantis',
   },
   icons: {
     apple: '/apple-touch-icon.png',

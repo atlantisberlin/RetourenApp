@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { getOperator, refreshActivity } from '@/lib/operator'
+import { addToVersandHistory } from '@/lib/versandHistory'
 
 type Photo = { id: string; dataUrl: string; name: string; type: string }
 
@@ -62,6 +63,16 @@ export default function VersandScreen() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Unbekannter Fehler')
+      addToVersandHistory({
+        carrier,
+        trackingNumber: trackingNumber.trim(),
+        deliveryNote: deliveryNote.trim(),
+        insuranceValue: insuranceValue.trim(),
+        notes: notes.trim(),
+        operatorName: getOperator() ?? 'Unbekannt',
+        submittedAt: new Date().toISOString(),
+        taskId: data.taskId,
+      })
       setTaskId(data.taskId)
       setMode(data.mode)
       setSubmitted(true)
