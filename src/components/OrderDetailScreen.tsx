@@ -136,9 +136,14 @@ export default function OrderDetailScreen({
                     fontFamily: 'var(--font-mono)',
                     fontSize: 11,
                     color: 'var(--text-muted)',
+                    overflow: 'hidden',
                   }}
                 >
-                  {i + 1}
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt={item.productName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    i + 1
+                  )}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 3, lineHeight: 1.35 }}>

@@ -165,6 +165,9 @@ export default function ErfassenScreen({ order }: { order: Order }) {
                     onChange={(e) => updateCapture(i, { returned: e.target.checked })}
                     style={{ marginTop: 2 }}
                   />
+                  {item.imageUrl && (
+                    <img src={item.imageUrl} alt={item.productName} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
+                  )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 3, lineHeight: 1.3 }}>
                       {item.productName}

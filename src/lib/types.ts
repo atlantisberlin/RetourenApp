@@ -19,6 +19,7 @@ export type OrderItem = {
   sku?: string
   quantity: number
   price: number
+  imageUrl?: string
 }
 
 export type ReturnCondition = 'gut' | 'beschaedigt' | 'unvollstaendig' | 'defekt'
