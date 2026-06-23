@@ -22,9 +22,9 @@ function getClient(): BigQuery | null {
   try {
     if (process.env.GCP_SERVICE_ACCOUNT_JSON) {
       const creds = JSON.parse(process.env.GCP_SERVICE_ACCOUNT_JSON)
-      _bq = new BigQuery({ projectId: PROJECT, credentials: creds })
+      _bq = new BigQuery({ projectId: PROJECT, credentials: creds, location: 'europe-west3' })
     } else {
-      _bq = new BigQuery({ projectId: PROJECT })
+      _bq = new BigQuery({ projectId: PROJECT, location: 'europe-west3' })
     }
     return _bq
   } catch {
