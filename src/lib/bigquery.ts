@@ -94,7 +94,9 @@ export async function searchOrders(query: string): Promise<Order[]> {
       o.customers_name,
       o.customers_email_address,
       o.date_purchased,
-      o.orders_status
+      o.orders_status,
+      o.invoice_number,
+      o.lieferschein_number
     FROM ${table(T_ORDERS)} o
     WHERE
       ${isNumeric ? `o.orders_id = @num OR CAST(o.customers_id AS STRING) = @q OR` : ''}
@@ -153,7 +155,9 @@ export async function getOrder(id: string): Promise<Order | null> {
       o.customers_name,
       o.customers_email_address,
       o.date_purchased,
-      o.orders_status
+      o.orders_status,
+      o.invoice_number,
+      o.lieferschein_number
     FROM ${table(T_ORDERS)} o
     WHERE CAST(o.orders_id AS STRING) = @id
     LIMIT 1
