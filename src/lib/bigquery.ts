@@ -40,9 +40,7 @@ type BQOrderRow = {
   customers_number?: string
   date_purchased?: string
   orders_status?: string | number
-  orders_id_str?: string
-  invoice_number?: string
-  lieferschein_number?: string
+  bs_nr?: string
 }
 
 type BQItemRow = {
@@ -64,8 +62,8 @@ function mapOrder(row: BQOrderRow, items: BQItemRow[]): Order {
     customerName: row.customers_name ?? '—',
     customerEmail: row.customers_email_address ?? '',
     customerNumber: String(row.customers_id ?? '—'),
-    invoiceNumber: row.invoice_number,
-    deliveryNoteNumber: row.lieferschein_number,
+    invoiceNumber: row.bs_nr,
+    deliveryNoteNumber: undefined,
     status: String(row.orders_status ?? ''),
     source: 'Zentrallager',
     items: items.map((item, i) => ({
@@ -95,17 +93,15 @@ export async function searchOrders(query: string): Promise<Order[]> {
       o.customers_email_address,
       o.date_purchased,
       o.orders_status,
-      o.invoice_number,
-      o.lieferschein_number
+      o.bs_nr
     FROM ${table(T_ORDERS)} o
     WHERE
-      ${isNumeric ? `o.orders_id = @num OR CAST(o.customers_id AS STRING) = @q OR` : ''}
+      ${isNumeric ? `o.orders_id = @q OR o.customers_id = @q OR` : ''}
       LOWER(o.customers_name) LIKE LOWER(@name)
     ORDER BY o.date_purchased DESC
     LIMIT 20
   `
-  const params: Record<string, string | number> = { q, name: nameSearch }
-  if (isNumeric) params.num = Number(q)
+  const params: Record<string, string> = { q, name: nameSearch }
 
   const [rows] = await bq.query({ query: sql, params })
 
@@ -128,7 +124,7 @@ export async function searchOrders(query: string): Promise<Order[]> {
       products_quantity,
       final_price
     FROM ${table(T_ITEMS)}
-    WHERE CAST(orders_id AS STRING) IN (${placeholders})
+    WHERE orders_id IN (${placeholders})
   `
   const [itemRows] = await bq.query({ query: itemSql, params: itemParams })
 
@@ -156,10 +152,9 @@ export async function getOrder(id: string): Promise<Order | null> {
       o.customers_email_address,
       o.date_purchased,
       o.orders_status,
-      o.invoice_number,
-      o.lieferschein_number
+      o.bs_nr
     FROM ${table(T_ORDERS)} o
-    WHERE CAST(o.orders_id AS STRING) = @id
+    WHERE o.orders_id = @id
     LIMIT 1
   `
   const [rows] = await bq.query({ query: sql, params: { id } })
@@ -175,7 +170,7 @@ export async function getOrder(id: string): Promise<Order | null> {
       products_quantity,
       final_price
     FROM ${table(T_ITEMS)}
-    WHERE CAST(orders_id AS STRING) = @id
+    WHERE orders_id = @id
   `
   const [itemRows] = await bq.query({ query: itemSql, params: { id } })
   return mapOrder((rows as BQOrderRow[])[0], itemRows as BQItemRow[])
