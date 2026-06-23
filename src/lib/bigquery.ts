@@ -130,7 +130,11 @@ export async function searchOrders(query: string): Promise<Order[]> {
       i.final_price,
       p.products_image
     FROM ${table(T_ITEMS)} i
-    LEFT JOIN ${table('shop_products')} p ON i.products_id = p.products_id
+    LEFT JOIN (
+      SELECT DISTINCT products_id, ANY_VALUE(products_image) AS products_image
+      FROM ${table('shop_products')}
+      GROUP BY products_id
+    ) p ON i.products_id = p.products_id
     WHERE i.orders_id IN (${placeholders})
   `
   const [itemRows] = await bq.query({ query: itemSql, params: itemParams })
@@ -178,7 +182,11 @@ export async function getOrder(id: string): Promise<Order | null> {
       i.final_price,
       p.products_image
     FROM ${table(T_ITEMS)} i
-    LEFT JOIN ${table('shop_products')} p ON i.products_id = p.products_id
+    LEFT JOIN (
+      SELECT DISTINCT products_id, ANY_VALUE(products_image) AS products_image
+      FROM ${table('shop_products')}
+      GROUP BY products_id
+    ) p ON i.products_id = p.products_id
     WHERE i.orders_id = @id
   `
   const [itemRows] = await bq.query({ query: itemSql, params: { id } })

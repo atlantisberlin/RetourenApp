@@ -12,6 +12,7 @@ type Photo = { id: string; dataUrl: string; name: string; type: string }
 type ArticleCapture = {
   itemId: string
   productName: string
+  imageUrl?: string
   orderedQty: number
   returned: boolean | null
   condition: string | null
@@ -102,6 +103,7 @@ export default function RetourenWizard() {
     const rebuilt = selectedOrder.items.map((item: OrderItem) => ({
       itemId: item.id,
       productName: item.productName,
+      imageUrl: item.imageUrl,
       orderedQty: item.quantity,
       returned: null as boolean | null,
       condition: null as string | null,
@@ -666,9 +668,13 @@ function ArticleRow({ article, onToggleReturned, onCondition, onReason, onCaptur
     }}>
       {/* Main row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px' }}>
-        {/* Product image placeholder */}
+        {/* Product image */}
         <div style={{ width: 48, height: 48, borderRadius: 8, flexShrink: 0, background: 'var(--surface-3)', border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-          <DivingIcon />
+          {article.imageUrl ? (
+            <img src={article.imageUrl} alt={article.productName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <DivingIcon />
+          )}
         </div>
 
         {/* Name + qty */}
