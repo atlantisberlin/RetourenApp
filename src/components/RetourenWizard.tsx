@@ -46,6 +46,7 @@ export default function RetourenWizard() {
 
   // Step 1
   const [trackingNumber, setTrackingNumber] = useState('')
+  const [isDhlReturn, setIsDhlReturn] = useState<boolean | null>(null)
   const [labelPhoto, setLabelPhoto] = useState<Photo | null>(null)
   const [exteriorPhoto, setExteriorPhoto] = useState<Photo | null>(null)
 
@@ -85,6 +86,7 @@ export default function RetourenWizard() {
           if (d.trackingNumber) setTrackingNumber(d.trackingNumber)
           if (d.step) setStep(d.step)
           if (d.notes) setNotes(d.notes)
+          if (d.isDhlReturn != null) setIsDhlReturn(d.isDhlReturn)
           if (d.selectedOrder) {
             pendingArticlesRef.current = d.articles ?? null
             setSelectedOrder(d.selectedOrder)
@@ -125,13 +127,14 @@ export default function RetourenWizard() {
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
         step,
         trackingNumber,
+        isDhlReturn,
         selectedOrder,
         articles: articles.map(({ photo: _p, ...rest }) => rest),
         notes,
         savedAt: new Date().toISOString(),
       }))
     } catch { /* ignore */ }
-  }, [step, trackingNumber, selectedOrder, articles, notes])
+  }, [step, trackingNumber, isDhlReturn, selectedOrder, articles, notes])
 
   const isStep1Valid = trackingNumber.trim().length > 3
   const isStep2Valid = selectedOrder !== null
@@ -222,6 +225,7 @@ export default function RetourenWizard() {
         packageService: '',
         notes: notes.trim(),
         operatorName: operator ?? 'Unbekannt',
+        dhlReturn: isDhlReturn === true,
         photos: [labelPhoto, exteriorPhoto, slipPhoto, ...articles.map(a => a.photo)].filter((p): p is Photo => p !== null),
       }
       const res = await fetch('/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -276,7 +280,7 @@ export default function RetourenWizard() {
         )}
         <button className="btn btn-primary btn-lg btn-full" style={{ maxWidth: 320, marginBottom: 12 }} onClick={() => {
           localStorage.removeItem(DRAFT_KEY)
-          setStep(1); setTrackingNumber(''); setLabelPhoto(null); setExteriorPhoto(null); setSlipPhoto(null)
+          setStep(1); setTrackingNumber(''); setIsDhlReturn(null); setLabelPhoto(null); setExteriorPhoto(null); setSlipPhoto(null)
           setSearchQuery(''); setSearchResults([]); setSelectedOrder(null); setArticles([])
           setNotes(''); setSubmitted(false); setTaskId(null); setError(null)
         }}>
@@ -378,6 +382,41 @@ export default function RetourenWizard() {
               autoComplete="off"
               style={{ fontSize: 16, fontFamily: 'var(--font-mono)' }}
             />
+
+            {/* DHL Return Label toggle */}
+            <div style={{ marginTop: 20 }}>
+              <label style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', display: 'block', marginBottom: 8 }}>
+                DHL RETOURENLABEL?
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => { refreshActivity(); setIsDhlReturn(true) }}
+                  style={{
+                    flex: 1, padding: '10px', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                    border: `1.5px solid ${isDhlReturn === true ? 'var(--blue)' : 'var(--border)'}`,
+                    background: isDhlReturn === true ? 'var(--blue)' : 'var(--surface)',
+                    color: isDhlReturn === true ? 'white' : 'var(--text-3)',
+                    transition: 'all 0.12s',
+                  }}
+                >
+                  Ja — DHL Retoure
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { refreshActivity(); setIsDhlReturn(false) }}
+                  style={{
+                    flex: 1, padding: '10px', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                    border: `1.5px solid ${isDhlReturn === false ? 'var(--border)' : 'var(--border)'}`,
+                    background: isDhlReturn === false ? 'var(--surface-3)' : 'var(--surface)',
+                    color: isDhlReturn === false ? 'var(--text-2)' : 'var(--text-muted)',
+                    transition: 'all 0.12s',
+                  }}
+                >
+                  Nein
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

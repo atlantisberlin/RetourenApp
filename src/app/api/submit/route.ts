@@ -5,6 +5,7 @@ export async function POST(request: Request) {
 
   const asanaToken = process.env.ASANA_TOKEN
   const asanaProject = process.env.ASANA_PROJECT_GID
+  const dhlTagGid = process.env.ASANA_DHL_TAG_GID
 
   if (!asanaToken || !asanaProject) {
     console.log('[demo] Asana nicht konfiguriert — simuliere Einreichung:', body.orderId)
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
         name: title,
         notes: description,
         projects: [asanaProject],
+        ...(body.dhlReturn && dhlTagGid ? { tags: [dhlTagGid] } : {}),
       },
     }),
   })

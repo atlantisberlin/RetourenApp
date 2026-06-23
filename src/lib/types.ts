@@ -49,6 +49,7 @@ export type ReturnCapture = {
   trackingNumber: string
   notes: string
   operatorName: string
+  dhlReturn?: boolean
   photos?: Array<{ id: string; type: string; dataUrl: string; name: string }>
 }
 
