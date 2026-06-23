@@ -43,6 +43,8 @@ type BQOrderRow = {
   bs_nr?: string
 }
 
+const IMAGE_BASE = 'https://www.atlantiscloud.de/images/products/normal/'
+
 type BQItemRow = {
   orders_products_id?: string | number
   products_id?: string | number
@@ -50,6 +52,7 @@ type BQItemRow = {
   products_model?: string
   products_quantity?: string | number
   final_price?: string | number
+  products_image?: string
 }
 
 function mapOrder(row: BQOrderRow, items: BQItemRow[]): Order {
@@ -73,6 +76,7 @@ function mapOrder(row: BQOrderRow, items: BQItemRow[]): Order {
       sku: item.products_model,
       quantity: Number(item.products_quantity ?? 1),
       price: Number(item.final_price ?? 0),
+      imageUrl: item.products_image ? IMAGE_BASE + item.products_image : undefined,
     })),
   }
 }
@@ -117,15 +121,17 @@ export async function searchOrders(query: string): Promise<Order[]> {
 
   const itemSql = `
     SELECT
-      orders_products_id,
-      orders_id,
-      products_id,
-      products_name,
-      products_model,
-      products_quantity,
-      final_price
-    FROM ${table(T_ITEMS)}
-    WHERE orders_id IN (${placeholders})
+      i.orders_products_id,
+      i.orders_id,
+      i.products_id,
+      i.products_name,
+      i.products_model,
+      i.products_quantity,
+      i.final_price,
+      p.products_image
+    FROM ${table(T_ITEMS)} i
+    LEFT JOIN ${table('shop_products')} p ON i.products_id = p.products_id
+    WHERE i.orders_id IN (${placeholders})
   `
   const [itemRows] = await bq.query({ query: itemSql, params: itemParams })
 
@@ -163,15 +169,17 @@ export async function getOrder(id: string): Promise<Order | null> {
 
   const itemSql = `
     SELECT
-      orders_products_id,
-      orders_id,
-      products_id,
-      products_name,
-      products_model,
-      products_quantity,
-      final_price
-    FROM ${table(T_ITEMS)}
-    WHERE orders_id = @id
+      i.orders_products_id,
+      i.orders_id,
+      i.products_id,
+      i.products_name,
+      i.products_model,
+      i.products_quantity,
+      i.final_price,
+      p.products_image
+    FROM ${table(T_ITEMS)} i
+    LEFT JOIN ${table('shop_products')} p ON i.products_id = p.products_id
+    WHERE i.orders_id = @id
   `
   const [itemRows] = await bq.query({ query: itemSql, params: { id } })
   return mapOrder((rows as BQOrderRow[])[0], itemRows as BQItemRow[])
