@@ -55,7 +55,7 @@ type BQItemRow = {
 function mapOrder(row: BQOrderRow, items: BQItemRow[]): Order {
   return {
     id: String(row.orders_id),
-    orderNumber: String(row.orders_id),
+    orderNumber: row.bs_nr ?? String(row.orders_id),
     date: row.date_purchased
       ? new Date(row.date_purchased).toLocaleDateString('de-DE')
       : '—',
@@ -97,6 +97,7 @@ export async function searchOrders(query: string): Promise<Order[]> {
     FROM ${table(T_ORDERS)} o
     WHERE
       ${isNumeric ? `o.orders_id = @q OR o.customers_id = @q OR` : ''}
+      o.bs_nr = @q OR
       LOWER(o.customers_name) LIKE LOWER(@name)
     ORDER BY o.date_purchased DESC
     LIMIT 20
