@@ -4,7 +4,7 @@ import type { Order, OrderItem } from './types'
 const PROJECT = process.env.BQ_PROJECT ?? 'zentrallager'
 const DATASET = process.env.BQ_DATASET ?? 'xanario_shop'
 const T_ORDERS = process.env.BQ_TABLE_ORDERS ?? 'shop_orders'
-const T_ITEMS = process.env.BQ_TABLE_ITEMS ?? 'shop_order_products'
+const T_ITEMS = process.env.BQ_TABLE_ITEMS ?? 'shop_orders_products'
 const T_CUSTOMERS = process.env.BQ_TABLE_CUSTOMERS ?? 'shop_customers'
 
 function table(name: string) {
@@ -22,9 +22,9 @@ function getClient(): BigQuery | null {
   try {
     if (process.env.GCP_SERVICE_ACCOUNT_JSON) {
       const creds = JSON.parse(process.env.GCP_SERVICE_ACCOUNT_JSON)
-      _bq = new BigQuery({ projectId: PROJECT, credentials: creds })
+      _bq = new BigQuery({ projectId: PROJECT, credentials: creds, location: 'europe-west3' })
     } else {
-      _bq = new BigQuery({ projectId: PROJECT })
+      _bq = new BigQuery({ projectId: PROJECT, location: 'europe-west3' })
     }
     return _bq
   } catch {
