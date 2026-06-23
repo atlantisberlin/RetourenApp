@@ -35,7 +35,7 @@ function getClient(): BigQuery | null {
 type BQOrderRow = {
   orders_id: string | number
   customers_id?: string | number
-  customers_name?: string
+  delivery_name?: string
   customers_email_address?: string
   customers_number?: string
   date_purchased?: string
@@ -59,7 +59,7 @@ function mapOrder(row: BQOrderRow, items: BQItemRow[]): Order {
     date: row.date_purchased
       ? new Date(row.date_purchased).toLocaleDateString('de-DE')
       : '—',
-    customerName: row.customers_name ?? '—',
+    customerName: row.delivery_name ?? '—',
     customerEmail: row.customers_email_address ?? '',
     customerNumber: String(row.customers_id ?? '—'),
     invoiceNumber: row.bs_nr,
@@ -89,7 +89,7 @@ export async function searchOrders(query: string): Promise<Order[]> {
     SELECT DISTINCT
       o.orders_id,
       o.customers_id,
-      o.customers_name,
+      o.delivery_name,
       o.customers_email_address,
       o.date_purchased,
       o.orders_status,
@@ -98,7 +98,7 @@ export async function searchOrders(query: string): Promise<Order[]> {
     WHERE
       ${isNumeric ? `o.orders_id = @q OR o.customers_id = @q OR` : ''}
       o.bs_nr = @q OR
-      LOWER(o.customers_name) LIKE LOWER(@name)
+      LOWER(o.delivery_name) LIKE LOWER(@name)
     ORDER BY o.date_purchased DESC
     LIMIT 20
   `
@@ -149,7 +149,7 @@ export async function getOrder(id: string): Promise<Order | null> {
     SELECT
       o.orders_id,
       o.customers_id,
-      o.customers_name,
+      o.delivery_name,
       o.customers_email_address,
       o.date_purchased,
       o.orders_status,
