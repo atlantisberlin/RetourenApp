@@ -183,6 +183,37 @@ export async function GET(request: Request) {
     }))
   }
 
+  // Schritt 9: Kunden-Namenssuche in ATLOS (unabhängig von ID)
+  const namePart = q.trim().split(/\s+/)
+  if (namePart.length >= 2) {
+    steps.push(await runStep('9_name_search_atlos', async () => {
+      const [rows] = await bq.query({
+        query: `SELECT orders_id, bs_nr, extern_orders_id,
+                  CONCAT(COALESCE(delivery_firstname,''),' ',COALESCE(delivery_lastname,'')) AS name,
+                  date_purchased
+                FROM ${table(T_ORDERS)}
+                WHERE LOWER(CONCAT(COALESCE(delivery_firstname,''),' ',COALESCE(delivery_lastname,''))) LIKE LOWER(@name)
+                ORDER BY date_purchased DESC LIMIT 10`,
+        params: { name: `%${q.trim()}%` },
+      })
+      return { count: rows.length, rows }
+    }))
+  }
+
+  // Schritt 10: Suche nach extern_orders_id in ATLOS
+  steps.push(await runStep('10_extern_orders_id', async () => {
+    const [rows] = await bq.query({
+      query: `SELECT orders_id, bs_nr, extern_orders_id,
+                CONCAT(COALESCE(delivery_firstname,''),' ',COALESCE(delivery_lastname,'')) AS name,
+                date_purchased
+              FROM ${table(T_ORDERS)}
+              WHERE extern_orders_id = @q OR extern_orders_id LIKE @pattern
+              LIMIT 5`,
+      params: { q: q.trim(), pattern: `%${q.trim()}%` },
+    })
+    return { count: rows.length, rows }
+  }))
+
   const allOk = steps.every((s) => (s as { ok: boolean }).ok)
   return Response.json({ allOk, dataset: `${PROJECT}.${DATASET}`, query: q, targetId, steps })
 }
