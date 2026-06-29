@@ -136,6 +136,34 @@ export async function GET(request: Request) {
     }))
   }
 
+  // Schritt 6: Datenmenge und neueste/älteste Bestellungen in ATLOS
+  steps.push(await runStep('6_atlos_overview', async () => {
+    const [rows] = await bq.query({
+      query: `SELECT COUNT(*) AS total,
+                MIN(date_purchased) AS aelteste,
+                MAX(date_purchased) AS neueste
+              FROM ${table(T_ORDERS)}`,
+      params: {},
+    })
+    return rows[0]
+  }))
+
+  // Schritt 7: Existiert die orders_id irgendwie ähnlich (LIKE)?
+  if (q.trim()) {
+    steps.push(await runStep('7_orders_id_like', async () => {
+      const [rows] = await bq.query({
+        query: `SELECT orders_id, bs_nr,
+                  CONCAT(COALESCE(delivery_firstname,''),' ',COALESCE(delivery_lastname,'')) AS name,
+                  date_purchased
+                FROM ${table(T_ORDERS)}
+                WHERE orders_id LIKE @pattern OR bs_nr LIKE @pattern
+                LIMIT 5`,
+        params: { pattern: `%${q.trim()}%` },
+      })
+      return { count: rows.length, rows }
+    }))
+  }
+
   const allOk = steps.every((s) => (s as { ok: boolean }).ok)
   return Response.json({ allOk, dataset: `${PROJECT}.${DATASET}`, query: q, targetId, steps })
 }
