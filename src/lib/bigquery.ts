@@ -114,7 +114,7 @@ export async function searchOrders(query: string): Promise<Order[]> {
   const nameSearch = `%${q}%`
 
   const sql = `
-    SELECT DISTINCT
+    SELECT
       o.orders_id,
       o.customers_id,
       CONCAT(COALESCE(o.delivery_firstname, ''), ' ', COALESCE(o.delivery_lastname, '')) AS delivery_name,
@@ -122,10 +122,14 @@ export async function searchOrders(query: string): Promise<Order[]> {
       o.date_purchased,
       o.orders_status,
       o.bs_nr,
-      c.customers_nr,
+      cust.customers_nr,
       inv.orders_rechnungsdatum
     FROM ${table(T_ORDERS)} o
-    LEFT JOIN ${table(T_CUSTOMERS)} c ON o.customers_id = c.customers_id
+    LEFT JOIN (
+      SELECT customers_id, ANY_VALUE(customers_nr) AS customers_nr
+      FROM ${table(T_CUSTOMERS)}
+      GROUP BY customers_id
+    ) cust ON o.customers_id = cust.customers_id
     LEFT JOIN (
       SELECT orders_id, ANY_VALUE(orders_rechnungsdatum) AS orders_rechnungsdatum
       FROM ${table(T_INVOICE)}
@@ -160,31 +164,13 @@ export async function searchOrders(query: string): Promise<Order[]> {
       i.products_model,
       i.products_quantity,
       i.final_price,
-      p.products_image,
-      r.retouren_nr,
-      g.gutschrift_nr
+      p.products_image
     FROM ${table(T_ITEMS)} i
     LEFT JOIN (
       SELECT DISTINCT products_id, ANY_VALUE(products_image) AS products_image
       FROM ${table(T_PRODUCTS)}
       GROUP BY products_id
     ) p ON i.products_id = p.products_id
-    LEFT JOIN (
-      SELECT rp.products_id, inv.orders_id, ANY_VALUE(r.retouren_nr) AS retouren_nr
-      FROM ${table(T_RETOUREN_PRODUCTS)} rp
-      JOIN ${table(T_RETOUREN)} r ON rp.retouren_id = r.retouren_id
-      JOIN ${table(T_INVOICE)} inv ON r.invoice_id = inv.invoice_id
-      WHERE inv.orders_id IN (${placeholders})
-      GROUP BY rp.products_id, inv.orders_id
-    ) r ON i.products_id = r.products_id AND i.orders_id = r.orders_id
-    LEFT JOIN (
-      SELECT gp.products_id, inv.orders_id, ANY_VALUE(g.gutschrift_nr) AS gutschrift_nr
-      FROM ${table(T_GUTSCHRIFT_PRODUCTS)} gp
-      JOIN ${table(T_GUTSCHRIFT)} g ON gp.gutschrift_id = g.gutschrift_id
-      JOIN ${table(T_INVOICE)} inv ON g.invoice_id = inv.invoice_id
-      WHERE inv.orders_id IN (${placeholders})
-      GROUP BY gp.products_id, inv.orders_id
-    ) g ON i.products_id = g.products_id AND i.orders_id = g.orders_id
     WHERE i.orders_id IN (${placeholders})
   `
   const [itemRows] = await bq.query({ query: itemSql, params: itemParams })
@@ -194,6 +180,48 @@ export async function searchOrders(query: string): Promise<Order[]> {
     const oid = String(item.orders_id)
     if (!itemsByOrder[oid]) itemsByOrder[oid] = []
     itemsByOrder[oid].push(item)
+  }
+
+  // Retoure / Gutschrift pro Produkt — separate resiliente Query
+  const retourenByKey: Record<string, string> = {}
+  const gutschriftByKey: Record<string, string> = {}
+  try {
+    const retourenSql = `
+      SELECT rp.products_id, inv.orders_id, ANY_VALUE(r.retouren_nr) AS retouren_nr
+      FROM ${table(T_RETOUREN_PRODUCTS)} rp
+      JOIN ${table(T_RETOUREN)} r ON rp.retouren_id = r.retouren_id
+      JOIN ${table(T_INVOICE)} inv ON r.invoice_id = inv.invoice_id
+      WHERE inv.orders_id IN (${placeholders})
+      GROUP BY rp.products_id, inv.orders_id
+    `
+    const [retourenRows] = await bq.query({ query: retourenSql, params: itemParams })
+    for (const row of retourenRows as { products_id: string; orders_id: string; retouren_nr: string }[]) {
+      retourenByKey[`${row.orders_id}:${row.products_id}`] = row.retouren_nr
+    }
+
+    const gutschriftSql = `
+      SELECT gp.products_id, inv.orders_id, ANY_VALUE(g.gutschrift_nr) AS gutschrift_nr
+      FROM ${table(T_GUTSCHRIFT_PRODUCTS)} gp
+      JOIN ${table(T_GUTSCHRIFT)} g ON gp.gutschrift_id = g.gutschrift_id
+      JOIN ${table(T_INVOICE)} inv ON g.invoice_id = inv.invoice_id
+      WHERE inv.orders_id IN (${placeholders})
+      GROUP BY gp.products_id, inv.orders_id
+    `
+    const [gutschriftRows] = await bq.query({ query: gutschriftSql, params: itemParams })
+    for (const row of gutschriftRows as { products_id: string; orders_id: string; gutschrift_nr: string }[]) {
+      gutschriftByKey[`${row.orders_id}:${row.products_id}`] = row.gutschrift_nr
+    }
+  } catch (e) {
+    console.error('Retouren/Gutschrift lookup failed (non-fatal):', e)
+  }
+
+  // Merge retoure/gutschrift into items
+  for (const items of Object.values(itemsByOrder)) {
+    for (const item of items) {
+      const key = `${(item as BQItemRow & { orders_id: string | number }).orders_id ?? ''}:${item.products_id}`
+      item.retouren_nr = retourenByKey[key] ?? null
+      item.gutschrift_nr = gutschriftByKey[key] ?? null
+    }
   }
 
   return (rows as BQOrderRow[]).map((r) =>
@@ -214,10 +242,14 @@ export async function getOrder(id: string): Promise<Order | null> {
       o.date_purchased,
       o.orders_status,
       o.bs_nr,
-      c.customers_nr,
+      cust.customers_nr,
       inv.orders_rechnungsdatum
     FROM ${table(T_ORDERS)} o
-    LEFT JOIN ${table(T_CUSTOMERS)} c ON o.customers_id = c.customers_id
+    LEFT JOIN (
+      SELECT customers_id, ANY_VALUE(customers_nr) AS customers_nr
+      FROM ${table(T_CUSTOMERS)}
+      GROUP BY customers_id
+    ) cust ON o.customers_id = cust.customers_id
     LEFT JOIN (
       SELECT orders_id, ANY_VALUE(orders_rechnungsdatum) AS orders_rechnungsdatum
       FROM ${table(T_INVOICE)}
@@ -238,35 +270,58 @@ export async function getOrder(id: string): Promise<Order | null> {
       i.products_model,
       i.products_quantity,
       i.final_price,
-      p.products_image,
-      r.retouren_nr,
-      g.gutschrift_nr
+      p.products_image
     FROM ${table(T_ITEMS)} i
     LEFT JOIN (
       SELECT DISTINCT products_id, ANY_VALUE(products_image) AS products_image
       FROM ${table(T_PRODUCTS)}
       GROUP BY products_id
     ) p ON i.products_id = p.products_id
-    LEFT JOIN (
+    WHERE i.orders_id = @id
+  `
+  const [itemRows] = await bq.query({ query: itemSql, params: { id } })
+  const items = itemRows as BQItemRow[]
+
+  // Retoure / Gutschrift — separate resiliente Queries
+  const retourenByProduct: Record<string, string> = {}
+  const gutschriftByProduct: Record<string, string> = {}
+  try {
+    const retourenSql = `
       SELECT rp.products_id, ANY_VALUE(r.retouren_nr) AS retouren_nr
       FROM ${table(T_RETOUREN_PRODUCTS)} rp
       JOIN ${table(T_RETOUREN)} r ON rp.retouren_id = r.retouren_id
       JOIN ${table(T_INVOICE)} inv ON r.invoice_id = inv.invoice_id
       WHERE inv.orders_id = @id
       GROUP BY rp.products_id
-    ) r ON i.products_id = r.products_id
-    LEFT JOIN (
+    `
+    const [retourenRows] = await bq.query({ query: retourenSql, params: { id } })
+    for (const row of retourenRows as { products_id: string; retouren_nr: string }[]) {
+      retourenByProduct[row.products_id] = row.retouren_nr
+    }
+
+    const gutschriftSql = `
       SELECT gp.products_id, ANY_VALUE(g.gutschrift_nr) AS gutschrift_nr
       FROM ${table(T_GUTSCHRIFT_PRODUCTS)} gp
       JOIN ${table(T_GUTSCHRIFT)} g ON gp.gutschrift_id = g.gutschrift_id
       JOIN ${table(T_INVOICE)} inv ON g.invoice_id = inv.invoice_id
       WHERE inv.orders_id = @id
       GROUP BY gp.products_id
-    ) g ON i.products_id = g.products_id
-    WHERE i.orders_id = @id
-  `
-  const [itemRows] = await bq.query({ query: itemSql, params: { id } })
-  return mapOrder((rows as BQOrderRow[])[0], itemRows as BQItemRow[])
+    `
+    const [gutschriftRows] = await bq.query({ query: gutschriftSql, params: { id } })
+    for (const row of gutschriftRows as { products_id: string; gutschrift_nr: string }[]) {
+      gutschriftByProduct[row.products_id] = row.gutschrift_nr
+    }
+  } catch (e) {
+    console.error('Retouren/Gutschrift lookup failed (non-fatal):', e)
+  }
+
+  for (const item of items) {
+    const pid = String(item.products_id ?? '')
+    item.retouren_nr = retourenByProduct[pid] ?? null
+    item.gutschrift_nr = gutschriftByProduct[pid] ?? null
+  }
+
+  return mapOrder((rows as BQOrderRow[])[0], items)
 }
 
 export function isBigQueryConfigured(): boolean {
