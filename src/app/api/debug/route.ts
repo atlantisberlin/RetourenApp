@@ -6,6 +6,7 @@ const T_ORDERS = process.env.BQ_TABLE_ORDERS ?? 'atlos_orders'
 const T_CUSTOMERS = process.env.BQ_TABLE_CUSTOMERS ?? 'atlos_customers'
 const T_ITEMS = process.env.BQ_TABLE_ITEMS ?? 'atlos_orders_products'
 const T_INVOICE = process.env.BQ_TABLE_INVOICE ?? 'atlos_invoice'
+const T_INVOICE_PRODUCTS = process.env.BQ_TABLE_INVOICE_PRODUCTS ?? 'atlos_invoice_products'
 const T_RETOUREN = process.env.BQ_TABLE_RETOUREN ?? 'atlos_retouren'
 const T_RETOUREN_PRODUCTS = process.env.BQ_TABLE_RETOUREN_PRODUCTS ?? 'atlos_retouren_products'
 const T_GUTSCHRIFT = process.env.BQ_TABLE_GUTSCHRIFT ?? 'atlos_gutschrift'
@@ -61,15 +62,18 @@ export async function GET(request: Request) {
       o.bs_nr,
       o.orders_status,
       o.date_purchased,
+      o.partnershop,
+      o.extern_orders_id,
       cust.customers_nr,
-      inv.orders_rechnungsdatum
+      inv.orders_rechnungsdatum,
+      inv.invoice_nr
     FROM ${table(T_ORDERS)} o
     LEFT JOIN (
       SELECT customers_id, ANY_VALUE(customers_nr) AS customers_nr
       FROM ${table(T_CUSTOMERS)} GROUP BY customers_id
     ) cust ON o.customers_id = cust.customers_id
     LEFT JOIN (
-      SELECT orders_id, ANY_VALUE(orders_rechnungsdatum) AS orders_rechnungsdatum
+      SELECT orders_id, ANY_VALUE(orders_rechnungsdatum) AS orders_rechnungsdatum, ANY_VALUE(invoice_nr) AS invoice_nr
       FROM ${table(T_INVOICE)} GROUP BY orders_id
     ) inv ON o.orders_id = inv.orders_id
     WHERE
@@ -106,6 +110,17 @@ export async function GET(request: Request) {
     steps.push(await runStep('3_invoice', async () => {
       const [rows] = await bq.query({
         query: `SELECT invoice_id, invoice_nr, orders_rechnungsdatum FROM ${table(T_INVOICE)} WHERE orders_id = @id LIMIT 5`,
+        params: { id: String(targetId) },
+      })
+      return { count: rows.length, rows }
+    }))
+
+    steps.push(await runStep('3b_invoice_products', async () => {
+      const [rows] = await bq.query({
+        query: `SELECT ip.invoice_products_id, ip.products_id, ip.products_name, ip.products_model, ip.products_quantity, ip.final_price
+                FROM ${table(T_INVOICE_PRODUCTS)} ip
+                JOIN ${table(T_INVOICE)} inv ON ip.invoice_id = inv.invoice_id
+                WHERE inv.orders_id = @id`,
         params: { id: String(targetId) },
       })
       return { count: rows.length, rows }
