@@ -2,10 +2,11 @@ import { BigQuery } from '@google-cloud/bigquery'
 import type { Order, OrderItem } from './types'
 
 const PROJECT = process.env.BQ_PROJECT ?? 'zentrallager'
-const DATASET = process.env.BQ_DATASET ?? 'xanario_shop'
-const T_ORDERS = process.env.BQ_TABLE_ORDERS ?? 'shop_orders'
-const T_ITEMS = process.env.BQ_TABLE_ITEMS ?? 'shop_orders_products'
-const T_CUSTOMERS = process.env.BQ_TABLE_CUSTOMERS ?? 'shop_customers'
+const DATASET = process.env.BQ_DATASET ?? 'ATLOS'
+const T_ORDERS = process.env.BQ_TABLE_ORDERS ?? 'atlos_orders'
+const T_ITEMS = process.env.BQ_TABLE_ITEMS ?? 'atlos_orders_products'
+const T_CUSTOMERS = process.env.BQ_TABLE_CUSTOMERS ?? 'atlos_customers'
+const T_PRODUCTS = process.env.BQ_TABLE_PRODUCTS ?? 'atlos_products'
 
 function table(name: string) {
   return `\`${PROJECT}.${DATASET}.${name}\``
@@ -132,7 +133,7 @@ export async function searchOrders(query: string): Promise<Order[]> {
     FROM ${table(T_ITEMS)} i
     LEFT JOIN (
       SELECT DISTINCT products_id, ANY_VALUE(products_image) AS products_image
-      FROM ${table('shop_products')}
+      FROM ${table(T_PRODUCTS)}
       GROUP BY products_id
     ) p ON i.products_id = p.products_id
     WHERE i.orders_id IN (${placeholders})
@@ -184,7 +185,7 @@ export async function getOrder(id: string): Promise<Order | null> {
     FROM ${table(T_ITEMS)} i
     LEFT JOIN (
       SELECT DISTINCT products_id, ANY_VALUE(products_image) AS products_image
-      FROM ${table('shop_products')}
+      FROM ${table(T_PRODUCTS)}
       GROUP BY products_id
     ) p ON i.products_id = p.products_id
     WHERE i.orders_id = @id
