@@ -149,6 +149,48 @@ export async function GET(request: Request) {
       })
       return { count: rows.length, rows }
     }))
+
+    steps.push(await runStep('5b_gutschrift_raw', async () => {
+      // Step 1: find gutschrift records for this order's invoice
+      const [gRows] = await bq.query({
+        query: `SELECT g.gutschrift_id, g.gutschrift_nr, g.invoice_id, g.invoice_nr
+                FROM ${table(T_GUTSCHRIFT)} g
+                JOIN ${table(T_INVOICE)} inv ON g.invoice_id = inv.invoice_id
+                WHERE inv.orders_id = @id`,
+        params: { id: String(targetId) },
+      })
+      if (!gRows || gRows.length === 0) return { gutschriften: [], gutschrift_products: [] }
+      const gids = (gRows as { gutschrift_id: string }[]).map(r => r.gutschrift_id)
+      // Step 2: get all product rows for these gutschriften
+      const gidPlaceholders = gids.map((_, i) => `@gid${i}`).join(',')
+      const gidParams: Record<string, string> = {}
+      gids.forEach((gid, i) => { gidParams[`gid${i}`] = String(gid) })
+      const [gpRows] = await bq.query({
+        query: `SELECT * FROM ${table(T_GUTSCHRIFT_PRODUCTS)} WHERE gutschrift_id IN (${gidPlaceholders}) LIMIT 20`,
+        params: gidParams,
+      })
+      return { gutschriften: gRows, gutschrift_products: gpRows }
+    }))
+
+    steps.push(await runStep('5c_retoure_raw', async () => {
+      const [rRows] = await bq.query({
+        query: `SELECT r.retouren_id, r.retouren_nr, r.invoice_id
+                FROM ${table(T_RETOUREN)} r
+                JOIN ${table(T_INVOICE)} inv ON r.invoice_id = inv.invoice_id
+                WHERE inv.orders_id = @id`,
+        params: { id: String(targetId) },
+      })
+      if (!rRows || rRows.length === 0) return { retouren: [], retouren_products: [] }
+      const rids = (rRows as { retouren_id: string }[]).map(r => r.retouren_id)
+      const ridPlaceholders = rids.map((_, i) => `@rid${i}`).join(',')
+      const ridParams: Record<string, string> = {}
+      rids.forEach((rid, i) => { ridParams[`rid${i}`] = String(rid) })
+      const [rpRows] = await bq.query({
+        query: `SELECT * FROM ${table(T_RETOUREN_PRODUCTS)} WHERE retouren_id IN (${ridPlaceholders}) LIMIT 20`,
+        params: ridParams,
+      })
+      return { retouren: rRows, retouren_products: rpRows }
+    }))
   }
 
   // Schritt 6: Datenmenge und neueste/älteste Bestellungen in ATLOS
