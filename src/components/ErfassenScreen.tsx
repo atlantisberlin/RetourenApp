@@ -135,15 +135,23 @@ export default function ErfassenScreen({ order }: { order: Order }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
           {order.items.map((item, i) => {
             const capture = captures[i]
+            const isGutschrift = !!item.existingGutschrift
+            const isRetoure = !!item.existingRetoure && !isGutschrift
             return (
               <div
                 key={item.id}
                 style={{
                   background: 'var(--surface)',
-                  border: `1.5px solid ${capture.returned ? 'var(--purple-border)' : 'var(--border)'}`,
+                  border: isGutschrift
+                    ? '1.5px solid var(--border)'
+                    : isRetoure
+                    ? '1.5px solid #93c5fd'
+                    : `1.5px solid ${capture.returned ? 'var(--purple-border)' : 'var(--border)'}`,
                   borderRadius: 14,
                   overflow: 'hidden',
                   transition: 'border-color 0.15s',
+                  opacity: isGutschrift ? 0.45 : 1,
+                  pointerEvents: isGutschrift ? 'none' : undefined,
                 }}
               >
                 {/* Article header row */}
@@ -152,8 +160,8 @@ export default function ErfassenScreen({ order }: { order: Order }) {
                     display: 'flex',
                     gap: 14,
                     padding: '16px 18px',
-                    cursor: 'pointer',
-                    background: capture.returned ? 'var(--purple-bg)' : 'transparent',
+                    cursor: isGutschrift ? 'default' : 'pointer',
+                    background: capture.returned ? 'var(--purple-bg)' : isRetoure ? '#eff6ff' : 'transparent',
                     transition: 'background 0.15s',
                     alignItems: 'flex-start',
                   }}
@@ -163,6 +171,7 @@ export default function ErfassenScreen({ order }: { order: Order }) {
                     className="check-toggle"
                     checked={capture.returned}
                     onChange={(e) => updateCapture(i, { returned: e.target.checked })}
+                    disabled={isGutschrift}
                     style={{ marginTop: 2 }}
                   />
                   {item.imageUrl && (
@@ -172,13 +181,23 @@ export default function ErfassenScreen({ order }: { order: Order }) {
                     <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 3, lineHeight: 1.3 }}>
                       {item.productName}
                     </div>
-                    <div style={{ fontSize: 13, color: 'var(--text-3)', display: 'flex', gap: 10 }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-3)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       {item.sku && <span style={{ fontFamily: 'var(--font-mono)' }}>{item.sku}</span>}
                       <span>Bestellt: {item.quantity}×</span>
                       <span>{item.price.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</span>
+                      {item.existingRetoure && (
+                        <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', background: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px' }}>
+                          Retoure {item.existingRetoure}
+                        </span>
+                      )}
+                      {item.existingGutschrift && (
+                        <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', background: '#ede9fe', color: '#5b21b6', border: '1px solid #ddd6fe', borderRadius: 4, padding: '1px 5px' }}>
+                          Gutschrift {item.existingGutschrift}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  {!capture.returned && (
+                  {!capture.returned && !isGutschrift && (
                     <span style={{ fontSize: 12, color: 'var(--text-faint)', flexShrink: 0 }}>antippen</span>
                   )}
                 </label>

@@ -6,6 +6,7 @@ export async function POST(request: Request) {
   const asanaToken = process.env.ASANA_TOKEN
   const asanaProject = process.env.ASANA_PROJECT_GID
   const dhlTagGid = process.env.ASANA_DHL_TAG_GID
+  const amazonTagGid = process.env.ASANA_AMAZON_TAG_GID ?? '1205680122433653'
 
   if (!asanaToken || !asanaProject) {
     console.log('[demo] Asana nicht konfiguriert — simuliere Einreichung:', body.orderId)
@@ -67,7 +68,10 @@ export async function POST(request: Request) {
         name: title,
         notes: description,
         projects: [asanaProject],
-        ...(body.dhlReturn && dhlTagGid ? { tags: [dhlTagGid] } : {}),
+        tags: [
+          ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
+          ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
+        ],
       },
     }),
   })
