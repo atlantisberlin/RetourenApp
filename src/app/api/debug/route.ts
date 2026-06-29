@@ -79,7 +79,23 @@ export async function GET(request: Request) {
     WHERE
       ${isNumeric ? `o.orders_id = @q OR o.customers_id = @q OR` : ''}
       o.bs_nr = @q OR
-      LOWER(CONCAT(COALESCE(o.delivery_firstname, ''), ' ', COALESCE(o.delivery_lastname, ''))) LIKE LOWER(@name)
+      o.extern_orders_id = @q OR
+      cust.customers_nr = @q OR
+      inv.invoice_nr = @q OR
+      o.orders_id IN (
+        SELECT DISTINCT inv2.orders_id
+        FROM ${table(T_RETOUREN)} r2
+        JOIN ${table(T_INVOICE)} inv2 ON r2.invoice_id = inv2.invoice_id
+        WHERE r2.retouren_nr = @q
+      ) OR
+      o.orders_id IN (
+        SELECT DISTINCT inv3.orders_id
+        FROM ${table(T_GUTSCHRIFT)} g3
+        JOIN ${table(T_INVOICE)} inv3 ON g3.invoice_id = inv3.invoice_id
+        WHERE g3.gutschrift_nr = @q
+      ) OR
+      LOWER(CONCAT(COALESCE(o.delivery_firstname, ''), ' ', COALESCE(o.delivery_lastname, ''))) LIKE LOWER(@name) OR
+      LOWER(CONCAT(COALESCE(o.billing_firstname, ''), ' ', COALESCE(o.billing_lastname, ''))) LIKE LOWER(@name)
     ORDER BY o.date_purchased DESC
     LIMIT 5
   `
