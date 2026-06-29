@@ -59,11 +59,23 @@ export default function OrderDetailScreen({
         <div className="card" style={{ marginBottom: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
-              <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>{order.customerName}</div>
+              <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>
+                {order.customerName}
+                {order.partnershop === 'amazon' && (
+                  <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, background: '#ff9900', color: '#111', borderRadius: 4, padding: '2px 7px', verticalAlign: 'middle', letterSpacing: '0.04em' }}>
+                    Amazon
+                  </span>
+                )}
+              </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>
                 KD {order.customerNumber}
                 {order.customerEmail ? ` · ${order.customerEmail}` : ''}
               </div>
+              {order.externOrderId && (
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                  Ext: {order.externOrderId}
+                </div>
+              )}
             </div>
             <span className={`badge ${order.status === '5' ? 'badge-red' : 'badge-blue'}`}>
               {STATUS_LABELS[order.status] ?? `Status ${order.status}`}
@@ -142,11 +154,12 @@ export default function OrderDetailScreen({
 
         <div className="card-section" style={{ marginBottom: 28 }}>
           {order.items.map((item, i) => {
-            const isBlocked = !!(item.existingRetoure || item.existingGutschrift)
+            const hasGutschrift = !!item.existingGutschrift
+            const hasRetoure = !!item.existingRetoure && !hasGutschrift
             return (
-              <div key={item.id}>
+              <div key={item.id} style={hasRetoure ? { borderLeft: '3px solid #3b82f6' } : undefined}>
                 {i > 0 && <hr />}
-                <div style={{ padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'center', opacity: isBlocked ? 0.5 : 1 }}>
+                <div style={{ padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'center', opacity: hasGutschrift ? 0.45 : 1 }}>
                   <div
                     style={{
                       width: 40,
