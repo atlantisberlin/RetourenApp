@@ -38,7 +38,6 @@ type BQOrderRow = {
   customers_id?: string | number
   delivery_name?: string
   customers_email_address?: string
-  customers_number?: string
   date_purchased?: string
   orders_status?: string | number
   bs_nr?: string
@@ -94,7 +93,7 @@ export async function searchOrders(query: string): Promise<Order[]> {
     SELECT DISTINCT
       o.orders_id,
       o.customers_id,
-      o.delivery_name,
+      CONCAT(COALESCE(o.delivery_firstname, ''), ' ', COALESCE(o.delivery_lastname, '')) AS delivery_name,
       o.customers_email_address,
       o.date_purchased,
       o.orders_status,
@@ -103,7 +102,7 @@ export async function searchOrders(query: string): Promise<Order[]> {
     WHERE
       ${isNumeric ? `o.orders_id = @q OR o.customers_id = @q OR` : ''}
       o.bs_nr = @q OR
-      LOWER(o.delivery_name) LIKE LOWER(@name)
+      LOWER(CONCAT(COALESCE(o.delivery_firstname, ''), ' ', COALESCE(o.delivery_lastname, ''))) LIKE LOWER(@name)
     ORDER BY o.date_purchased DESC
     LIMIT 20
   `
@@ -160,7 +159,7 @@ export async function getOrder(id: string): Promise<Order | null> {
     SELECT
       o.orders_id,
       o.customers_id,
-      o.delivery_name,
+      CONCAT(COALESCE(o.delivery_firstname, ''), ' ', COALESCE(o.delivery_lastname, '')) AS delivery_name,
       o.customers_email_address,
       o.date_purchased,
       o.orders_status,
