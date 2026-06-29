@@ -7,6 +7,11 @@ const T_ORDERS = process.env.BQ_TABLE_ORDERS ?? 'atlos_orders'
 const T_ITEMS = process.env.BQ_TABLE_ITEMS ?? 'atlos_orders_products'
 const T_CUSTOMERS = process.env.BQ_TABLE_CUSTOMERS ?? 'atlos_customers'
 const T_PRODUCTS = process.env.BQ_TABLE_PRODUCTS ?? 'atlos_products'
+const T_INVOICE = process.env.BQ_TABLE_INVOICE ?? 'atlos_invoice'
+const T_RETOUREN = process.env.BQ_TABLE_RETOUREN ?? 'atlos_retouren'
+const T_RETOUREN_PRODUCTS = process.env.BQ_TABLE_RETOUREN_PRODUCTS ?? 'atlos_retouren_products'
+const T_GUTSCHRIFT = process.env.BQ_TABLE_GUTSCHRIFT ?? 'atlos_gutschrift'
+const T_GUTSCHRIFT_PRODUCTS = process.env.BQ_TABLE_GUTSCHRIFT_PRODUCTS ?? 'atlos_gutschrift_products'
 
 function table(name: string) {
   return `\`${PROJECT}.${DATASET}.${name}\``
@@ -41,6 +46,8 @@ type BQOrderRow = {
   date_purchased?: string
   orders_status?: string | number
   bs_nr?: string
+  customers_nr?: string
+  orders_rechnungsdatum?: string
 }
 
 const IMAGE_BASE = 'https://www.atlantiscloud.de/images/products/normal/'
@@ -53,9 +60,22 @@ type BQItemRow = {
   products_quantity?: string | number
   final_price?: string | number
   products_image?: string
+  retouren_nr?: string | null
+  gutschrift_nr?: string | null
 }
 
 function mapOrder(row: BQOrderRow, items: BQItemRow[]): Order {
+  let invoiceDate: string | undefined
+  let invoiceDateWarning: boolean | undefined
+  if (row.orders_rechnungsdatum) {
+    const d = new Date(row.orders_rechnungsdatum)
+    if (!isNaN(d.getTime())) {
+      invoiceDate = d.toLocaleDateString('de-DE')
+      const diffDays = (Date.now() - d.getTime()) / 86_400_000
+      if (diffDays > 14) invoiceDateWarning = true
+    }
+  }
+
   return {
     id: String(row.orders_id),
     orderNumber: row.bs_nr ?? String(row.orders_id),
@@ -64,11 +84,13 @@ function mapOrder(row: BQOrderRow, items: BQItemRow[]): Order {
       : '—',
     customerName: row.delivery_name ?? '—',
     customerEmail: row.customers_email_address ?? '',
-    customerNumber: String(row.customers_id ?? '—'),
+    customerNumber: row.customers_nr ?? String(row.customers_id ?? '—'),
     invoiceNumber: row.bs_nr,
     deliveryNoteNumber: undefined,
+    invoiceDate,
+    invoiceDateWarning,
     status: String(row.orders_status ?? ''),
-    source: 'Zentrallager',
+    source: 'ATLOS',
     items: items.map((item, i) => ({
       id: String(item.orders_products_id ?? i),
       productId: String(item.products_id ?? ''),
@@ -77,6 +99,8 @@ function mapOrder(row: BQOrderRow, items: BQItemRow[]): Order {
       quantity: Number(item.products_quantity ?? 1),
       price: Number(item.final_price ?? 0),
       imageUrl: item.products_image ? IMAGE_BASE + item.products_image : undefined,
+      existingRetoure: item.retouren_nr ?? null,
+      existingGutschrift: item.gutschrift_nr ?? null,
     })),
   }
 }
@@ -97,8 +121,16 @@ export async function searchOrders(query: string): Promise<Order[]> {
       o.customers_email_address,
       o.date_purchased,
       o.orders_status,
-      o.bs_nr
+      o.bs_nr,
+      c.customers_nr,
+      inv.orders_rechnungsdatum
     FROM ${table(T_ORDERS)} o
+    LEFT JOIN ${table(T_CUSTOMERS)} c ON o.customers_id = c.customers_id
+    LEFT JOIN (
+      SELECT orders_id, ANY_VALUE(orders_rechnungsdatum) AS orders_rechnungsdatum
+      FROM ${table(T_INVOICE)}
+      GROUP BY orders_id
+    ) inv ON o.orders_id = inv.orders_id
     WHERE
       ${isNumeric ? `o.orders_id = @q OR o.customers_id = @q OR` : ''}
       o.bs_nr = @q OR
@@ -128,13 +160,31 @@ export async function searchOrders(query: string): Promise<Order[]> {
       i.products_model,
       i.products_quantity,
       i.final_price,
-      p.products_image
+      p.products_image,
+      r.retouren_nr,
+      g.gutschrift_nr
     FROM ${table(T_ITEMS)} i
     LEFT JOIN (
       SELECT DISTINCT products_id, ANY_VALUE(products_image) AS products_image
       FROM ${table(T_PRODUCTS)}
       GROUP BY products_id
     ) p ON i.products_id = p.products_id
+    LEFT JOIN (
+      SELECT rp.products_id, inv.orders_id, ANY_VALUE(r.retouren_nr) AS retouren_nr
+      FROM ${table(T_RETOUREN_PRODUCTS)} rp
+      JOIN ${table(T_RETOUREN)} r ON rp.retouren_id = r.retouren_id
+      JOIN ${table(T_INVOICE)} inv ON r.invoice_id = inv.invoice_id
+      WHERE inv.orders_id IN (${placeholders})
+      GROUP BY rp.products_id, inv.orders_id
+    ) r ON i.products_id = r.products_id AND i.orders_id = r.orders_id
+    LEFT JOIN (
+      SELECT gp.products_id, inv.orders_id, ANY_VALUE(g.gutschrift_nr) AS gutschrift_nr
+      FROM ${table(T_GUTSCHRIFT_PRODUCTS)} gp
+      JOIN ${table(T_GUTSCHRIFT)} g ON gp.gutschrift_id = g.gutschrift_id
+      JOIN ${table(T_INVOICE)} inv ON g.invoice_id = inv.invoice_id
+      WHERE inv.orders_id IN (${placeholders})
+      GROUP BY gp.products_id, inv.orders_id
+    ) g ON i.products_id = g.products_id AND i.orders_id = g.orders_id
     WHERE i.orders_id IN (${placeholders})
   `
   const [itemRows] = await bq.query({ query: itemSql, params: itemParams })
@@ -163,8 +213,16 @@ export async function getOrder(id: string): Promise<Order | null> {
       o.customers_email_address,
       o.date_purchased,
       o.orders_status,
-      o.bs_nr
+      o.bs_nr,
+      c.customers_nr,
+      inv.orders_rechnungsdatum
     FROM ${table(T_ORDERS)} o
+    LEFT JOIN ${table(T_CUSTOMERS)} c ON o.customers_id = c.customers_id
+    LEFT JOIN (
+      SELECT orders_id, ANY_VALUE(orders_rechnungsdatum) AS orders_rechnungsdatum
+      FROM ${table(T_INVOICE)}
+      GROUP BY orders_id
+    ) inv ON o.orders_id = inv.orders_id
     WHERE o.orders_id = @id
     LIMIT 1
   `
@@ -180,13 +238,31 @@ export async function getOrder(id: string): Promise<Order | null> {
       i.products_model,
       i.products_quantity,
       i.final_price,
-      p.products_image
+      p.products_image,
+      r.retouren_nr,
+      g.gutschrift_nr
     FROM ${table(T_ITEMS)} i
     LEFT JOIN (
       SELECT DISTINCT products_id, ANY_VALUE(products_image) AS products_image
       FROM ${table(T_PRODUCTS)}
       GROUP BY products_id
     ) p ON i.products_id = p.products_id
+    LEFT JOIN (
+      SELECT rp.products_id, ANY_VALUE(r.retouren_nr) AS retouren_nr
+      FROM ${table(T_RETOUREN_PRODUCTS)} rp
+      JOIN ${table(T_RETOUREN)} r ON rp.retouren_id = r.retouren_id
+      JOIN ${table(T_INVOICE)} inv ON r.invoice_id = inv.invoice_id
+      WHERE inv.orders_id = @id
+      GROUP BY rp.products_id
+    ) r ON i.products_id = r.products_id
+    LEFT JOIN (
+      SELECT gp.products_id, ANY_VALUE(g.gutschrift_nr) AS gutschrift_nr
+      FROM ${table(T_GUTSCHRIFT_PRODUCTS)} gp
+      JOIN ${table(T_GUTSCHRIFT)} g ON gp.gutschrift_id = g.gutschrift_id
+      JOIN ${table(T_INVOICE)} inv ON g.invoice_id = inv.invoice_id
+      WHERE inv.orders_id = @id
+      GROUP BY gp.products_id
+    ) g ON i.products_id = g.products_id
     WHERE i.orders_id = @id
   `
   const [itemRows] = await bq.query({ query: itemSql, params: { id } })

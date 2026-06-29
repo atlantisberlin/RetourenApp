@@ -112,57 +112,93 @@ export default function OrderDetailScreen({
           </div>
         )}
 
+        {/* Invoice date warning */}
+        {order.invoiceDateWarning && order.invoiceDate && (
+          <div style={{
+            marginBottom: 16,
+            padding: '12px 16px',
+            background: '#fff7ed',
+            border: '1px solid #fed7aa',
+            borderRadius: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0 }}>
+              <path d="M9 2L1.5 15.5h15L9 2z" stroke="#ea580c" strokeWidth="1.5" strokeLinejoin="round"/>
+              <path d="M9 7v4" stroke="#ea580c" strokeWidth="1.5" strokeLinecap="round"/>
+              <circle cx="9" cy="13" r="0.75" fill="#ea580c"/>
+            </svg>
+            <span style={{ fontSize: 13, color: '#9a3412' }}>
+              Diese Rechnung ist vom <strong>{order.invoiceDate}</strong> — älter als 14 Tage
+            </span>
+          </div>
+        )}
+
         {/* Articles */}
         <div className="section-title">
           {order.items.length} {order.items.length === 1 ? 'Position' : 'Positionen'}
         </div>
 
         <div className="card-section" style={{ marginBottom: 28 }}>
-          {order.items.map((item, i) => (
-            <div key={item.id}>
-              {i > 0 && <hr />}
-              <div style={{ padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'center' }}>
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
-                    background: 'var(--surface-3)',
-                    border: '1px solid var(--border-2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 11,
-                    color: 'var(--text-muted)',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {item.imageUrl ? (
-                    <img src={item.imageUrl} alt={item.productName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    i + 1
-                  )}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 3, lineHeight: 1.35 }}>
-                    {item.productName}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {item.sku && (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
-                        {item.sku}
-                      </span>
+          {order.items.map((item, i) => {
+            const isBlocked = !!(item.existingRetoure || item.existingGutschrift)
+            return (
+              <div key={item.id}>
+                {i > 0 && <hr />}
+                <div style={{ padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'center', opacity: isBlocked ? 0.5 : 1 }}>
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      background: 'var(--surface-3)',
+                      border: '1px solid var(--border-2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 11,
+                      color: 'var(--text-muted)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.productName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      i + 1
                     )}
-                    <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                      {item.quantity}× · {item.price.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
-                    </span>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 3, lineHeight: 1.35 }}>
+                      {item.productName}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {item.sku && (
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
+                          {item.sku}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                        {item.quantity}× · {item.price.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
+                      </span>
+                      {item.existingRetoure && (
+                        <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', borderRadius: 4, padding: '2px 6px' }}>
+                          Retoure {item.existingRetoure}
+                        </span>
+                      )}
+                      {item.existingGutschrift && (
+                        <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', background: '#ede9fe', color: '#5b21b6', border: '1px solid #ddd6fe', borderRadius: 4, padding: '2px 6px' }}>
+                          Gutschrift {item.existingGutschrift}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* CTA */}

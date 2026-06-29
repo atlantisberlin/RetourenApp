@@ -7,6 +7,8 @@ export type Order = {
   customerNumber: string
   invoiceNumber?: string
   deliveryNoteNumber?: string
+  invoiceDate?: string
+  invoiceDateWarning?: boolean
   status: string
   items: OrderItem[]
   source?: string
@@ -20,6 +22,8 @@ export type OrderItem = {
   quantity: number
   price: number
   imageUrl?: string
+  existingRetoure?: string | null
+  existingGutschrift?: string | null
 }
 
 export type ReturnCondition = 'gut' | 'beschaedigt' | 'unvollstaendig' | 'defekt'
