@@ -67,6 +67,13 @@ type BQItemRow = {
 }
 
 const IMAGE_BASE = 'https://www.atlantiscloud.de/images/products/normal/'
+const AMAZON_EXTERN_PATTERN = /^\d{3}-\d{7}-\d{7}$/
+
+function isAmazon(row: BQOrderRow): boolean {
+  if (row.partnershop && row.partnershop.toLowerCase() === 'amazon') return true
+  if (row.extern_orders_id && AMAZON_EXTERN_PATTERN.test(row.extern_orders_id.trim())) return true
+  return false
+}
 
 function mapItem(item: BQItemRow, idx: number): OrderItem {
   return {
@@ -109,7 +116,7 @@ function mapOrder(row: BQOrderRow, items: BQItemRow[]): Order {
     invoiceDateWarning,
     status: String(row.orders_status ?? ''),
     source: 'ATLOS',
-    partnershop: row.partnershop ?? undefined,
+    partnershop: isAmazon(row) ? 'amazon' : (row.partnershop ?? undefined),
     externOrderId: row.extern_orders_id ?? undefined,
     items: items.map((item, i) => mapItem(item, i)),
   }
@@ -131,22 +138,38 @@ async function fetchItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]
       ip.final_price,
       ip.products_quantity,
       p.products_image,
-      ret.retouren_nr,
-      gut.gutschrift_nr
+      COALESCE(ret_id.retouren_nr, ret_pid.retouren_nr) AS retouren_nr,
+      COALESCE(gut_id.gutschrift_nr, gut_pid.gutschrift_nr) AS gutschrift_nr
     FROM ${table(T_INVOICE_PRODUCTS)} ip
     JOIN ${table(T_INVOICE)} inv ON ip.invoice_id = inv.invoice_id
     LEFT JOIN (
       SELECT rp.invoice_products_id, ANY_VALUE(r.retouren_nr) AS retouren_nr
       FROM ${table(T_RETOUREN_PRODUCTS)} rp
       JOIN ${table(T_RETOUREN)} r ON rp.retouren_id = r.retouren_id
+      WHERE rp.invoice_products_id IS NOT NULL
       GROUP BY rp.invoice_products_id
-    ) ret ON ip.invoice_products_id = ret.invoice_products_id
+    ) ret_id ON ip.invoice_products_id = ret_id.invoice_products_id
+    LEFT JOIN (
+      SELECT rp.products_id, inv2.orders_id, ANY_VALUE(r.retouren_nr) AS retouren_nr
+      FROM ${table(T_RETOUREN_PRODUCTS)} rp
+      JOIN ${table(T_RETOUREN)} r ON rp.retouren_id = r.retouren_id
+      JOIN ${table(T_INVOICE)} inv2 ON r.invoice_id = inv2.invoice_id
+      GROUP BY rp.products_id, inv2.orders_id
+    ) ret_pid ON ip.products_id = ret_pid.products_id AND inv.orders_id = ret_pid.orders_id
     LEFT JOIN (
       SELECT gp.invoice_products_id, ANY_VALUE(g.gutschrift_nr) AS gutschrift_nr
       FROM ${table(T_GUTSCHRIFT_PRODUCTS)} gp
       JOIN ${table(T_GUTSCHRIFT)} g ON gp.gutschrift_id = g.gutschrift_id
+      WHERE gp.invoice_products_id IS NOT NULL
       GROUP BY gp.invoice_products_id
-    ) gut ON ip.invoice_products_id = gut.invoice_products_id
+    ) gut_id ON ip.invoice_products_id = gut_id.invoice_products_id
+    LEFT JOIN (
+      SELECT gp.products_id, inv2.orders_id, ANY_VALUE(g.gutschrift_nr) AS gutschrift_nr
+      FROM ${table(T_GUTSCHRIFT_PRODUCTS)} gp
+      JOIN ${table(T_GUTSCHRIFT)} g ON gp.gutschrift_id = g.gutschrift_id
+      JOIN ${table(T_INVOICE)} inv2 ON g.invoice_id = inv2.invoice_id
+      GROUP BY gp.products_id, inv2.orders_id
+    ) gut_pid ON ip.products_id = gut_pid.products_id AND inv.orders_id = gut_pid.orders_id
     LEFT JOIN (
       SELECT products_id, ANY_VALUE(products_image) AS products_image
       FROM ${table(T_PRODUCTS)} GROUP BY products_id
