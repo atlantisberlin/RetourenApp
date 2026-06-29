@@ -164,6 +164,25 @@ export async function GET(request: Request) {
     }))
   }
 
+  // Schritt 8: Existiert die Bestellung im alten xanario_shop?
+  if (q.trim()) {
+    steps.push(await runStep('8_xanario_shop_check', async () => {
+      const xDataset = 'xanario_shop'
+      const xTable = `\`${PROJECT}.${xDataset}.shop_orders\``
+      const [rows] = await bq.query({
+        query: `SELECT orders_id, bs_nr,
+                  delivery_name,
+                  date_purchased,
+                  orders_status
+                FROM ${xTable}
+                WHERE orders_id = @q OR bs_nr = @q OR delivery_name LIKE @name
+                LIMIT 5`,
+        params: { q: q.trim(), name: `%${q.trim()}%` },
+      })
+      return { dataset: `${PROJECT}.${xDataset}`, count: rows.length, rows }
+    }))
+  }
+
   const allOk = steps.every((s) => (s as { ok: boolean }).ok)
   return Response.json({ allOk, dataset: `${PROJECT}.${DATASET}`, query: q, targetId, steps })
 }
