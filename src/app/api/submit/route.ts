@@ -57,23 +57,23 @@ export async function POST(request: Request) {
     const reason = escapeHtml(reasonLabel[item.reason] ?? item.reason)
     const resolution = item.resolution === 'erstattung' ? 'Erstattung' : 'Umtausch'
     const notes = item.notes ? ` · <em>${escapeHtml(item.notes)}</em>` : ''
-    return `<li><b>${name}</b><br/>${item.returnedQuantity}× · Zustand: ${cond} · Grund: ${reason} · ${resolution}${notes}</li>`
+    return `<li><strong>${name}</strong><br/>${item.returnedQuantity}× · Zustand: ${cond} · Grund: ${reason} · ${resolution}${notes}</li>`
   }).join('\n')
 
   // Rechnungsnr: invoiceNr ist die echte Rechnungsnummer, invoiceNumber ist bs_nr (Bestellnr.)
   const rechnungsNr = body.order.invoiceNr
 
   const metaRows = [
-    `<li><b>Bearbeitet von:</b> ${escapeHtml(body.operatorName)}</li>`,
-    `<li><b>Bestellnr.:</b> <code>${escapeHtml(body.order.orderNumber)}</code></li>`,
-    `<li><b>Kundennr.:</b> <code>${escapeHtml(body.order.customerNumber)}</code></li>`,
-    `<li><b>Kunde:</b> ${escapeHtml(body.order.customerName)}</li>`,
-    rechnungsNr ? `<li><b>Rechnungsnr.:</b> <code>${escapeHtml(rechnungsNr)}</code></li>` : null,
-    body.order.deliveryNoteNumber ? `<li><b>Lieferscheinnr.:</b> <code>${escapeHtml(body.order.deliveryNoteNumber)}</code></li>` : null,
+    `<li><strong>Bearbeitet von:</strong> ${escapeHtml(body.operatorName)}</li>`,
+    `<li><strong>Bestellnr.:</strong> <code>${escapeHtml(body.order.orderNumber)}</code></li>`,
+    `<li><strong>Kundennr.:</strong> <code>${escapeHtml(body.order.customerNumber)}</code></li>`,
+    `<li><strong>Kunde:</strong> ${escapeHtml(body.order.customerName)}</li>`,
+    rechnungsNr ? `<li><strong>Rechnungsnr.:</strong> <code>${escapeHtml(rechnungsNr)}</code></li>` : null,
+    body.order.deliveryNoteNumber ? `<li><strong>Lieferscheinnr.:</strong> <code>${escapeHtml(body.order.deliveryNoteNumber)}</code></li>` : null,
     body.order.activeRetourenNr
-      ? `<li><b>Retourennr.:</b> <code>${escapeHtml(body.order.activeRetourenNr)}</code></li>`
-      : `<li><b>Retourennr.:</b> <code>___________</code> <em>(bitte nachtragen)</em></li>`,
-    body.trackingNumber ? `<li><b>Tracking:</b> <code>${escapeHtml(body.trackingNumber)}</code></li>` : null,
+      ? `<li><strong>Retourennr.:</strong> <code>${escapeHtml(body.order.activeRetourenNr)}</code></li>`
+      : `<li><strong>Retourennr.:</strong> <code>___________</code> <em>(bitte nachtragen)</em></li>`,
+    body.trackingNumber ? `<li><strong>Tracking:</strong> <code>${escapeHtml(body.trackingNumber)}</code></li>` : null,
   ].filter(Boolean).join('\n')
 
   const bemerkungHtml = body.notes

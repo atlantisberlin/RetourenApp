@@ -600,9 +600,9 @@ export default function RetourenWizard() {
                 { label: 'FOTOS', val: `${[labelPhoto, exteriorPhoto, slipPhoto, ...articles.map(a => a.photo)].filter(Boolean).length} Aufnahmen` },
                 { label: 'MITARBEITER', val: operator },
               ] as { label: string; val: React.ReactNode }[]).map(({ label, val }, i, arr) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: i < arr.length - 1 ? 10 : 0, marginBottom: i < arr.length - 1 ? 10 : 0, borderBottom: i < arr.length - 1 ? '1px solid var(--border-2)' : 'none' }}>
-                  <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>{label}</span>
-                  <span style={{ fontSize: 14, fontWeight: 500, textAlign: 'right' as const, color: 'var(--text)' }}>{val}</span>
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingBottom: i < arr.length - 1 ? 10 : 0, marginBottom: i < arr.length - 1 ? 10 : 0, borderBottom: i < arr.length - 1 ? '1px solid var(--border-2)' : 'none' }}>
+                  <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', flexShrink: 0 }}>{label}</span>
+                  <span style={{ fontSize: 14, fontWeight: 500, textAlign: 'right' as const, color: 'var(--text)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val}</span>
                 </div>
               ))}
             </div>
@@ -639,6 +639,24 @@ export default function RetourenWizard() {
                 style={{ width: '100%', padding: '10px 12px', border: '1.5px solid var(--border)', borderRadius: 8, fontSize: 14, fontFamily: 'var(--font-sans)', color: 'var(--text)', background: 'var(--surface)', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
               />
             </div>
+
+            {/* Asana-Tags Vorschau */}
+            {(isDhlReturn || selectedOrder.partnershop === 'amazon' || selectedOrder.partnershop === 'ebay') && (
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', display: 'block', marginBottom: 8 }}>ASANA-TAGS</label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {isDhlReturn && (
+                    <span style={{ fontSize: 12, fontWeight: 700, background: '#FFCC00', color: '#000', borderRadius: 5, padding: '3px 10px' }}>DHL Retoure</span>
+                  )}
+                  {selectedOrder.partnershop === 'amazon' && (
+                    <span style={{ fontSize: 12, fontWeight: 700, background: '#FF9900', color: '#000', borderRadius: 5, padding: '3px 10px' }}>Amazon</span>
+                  )}
+                  {selectedOrder.partnershop === 'ebay' && (
+                    <span style={{ fontSize: 12, fontWeight: 700, background: '#E43137', color: '#fff', borderRadius: 5, padding: '3px 10px' }}>eBay</span>
+                  )}
+                </div>
+              </div>
+            )}
 
             {error && (
               <div style={{ border: '1px solid var(--red-border)', background: 'var(--red-bg)', borderRadius: 10, padding: '14px 16px', marginBottom: 16, fontSize: 14, color: 'var(--red-dark)' }}>
