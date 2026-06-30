@@ -13,8 +13,16 @@ const T_RETOUREN_PRODUCTS = process.env.BQ_TABLE_RETOUREN_PRODUCTS ?? 'atlos_ret
 const T_GUTSCHRIFT = process.env.BQ_TABLE_GUTSCHRIFT ?? 'atlos_gutschrift'
 const T_GUTSCHRIFT_PRODUCTS = process.env.BQ_TABLE_GUTSCHRIFT_PRODUCTS ?? 'atlos_gutschrift_products'
 
+const XANARIO_DATASET = process.env.BQ_XANARIO_DATASET ?? 'xanario_shop'
+const T_XANARIO_ORDERS = process.env.BQ_TABLE_XANARIO_ORDERS ?? 'shop_orders'
+const T_XANARIO_PACKINGSLIP = process.env.BQ_TABLE_XANARIO_PACKINGSLIP ?? 'shop_packingslip'
+
 function table(name: string) {
   return `\`${PROJECT}.${DATASET}.${name}\``
+}
+
+function xTable(name: string) {
+  return `\`${PROJECT}.${XANARIO_DATASET}.${name}\``
 }
 
 let _bq: BigQuery | null = null
@@ -242,6 +250,12 @@ export async function searchOrders(query: string): Promise<Order[]> {
         FROM ${table(T_RETOUREN)} r2
         JOIN ${table(T_INVOICE)} inv2 ON r2.invoice_id = inv2.invoice_id
         WHERE r2.retouren_nr = @q
+      ) OR
+      o.bs_nr IN (
+        SELECT xo.extern_orders_id
+        FROM ${xTable(T_XANARIO_PACKINGSLIP)} xp
+        JOIN ${xTable(T_XANARIO_ORDERS)} xo ON xp.orders_id = xo.orders_id
+        WHERE xp.packingslip_nr = @q
       ) OR
       LOWER(CONCAT(COALESCE(o.delivery_firstname, ''), ' ', COALESCE(o.delivery_lastname, ''))) LIKE LOWER(@name) OR
       LOWER(CONCAT(COALESCE(o.billing_firstname, ''), ' ', COALESCE(o.billing_lastname, ''))) LIKE LOWER(@name)
