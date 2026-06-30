@@ -600,9 +600,9 @@ export default function RetourenWizard() {
                 { label: 'FOTOS', val: `${[labelPhoto, exteriorPhoto, slipPhoto, ...articles.map(a => a.photo)].filter(Boolean).length} Aufnahmen` },
                 { label: 'MITARBEITER', val: operator },
               ] as { label: string; val: React.ReactNode }[]).map(({ label, val }, i, arr) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: i < arr.length - 1 ? 10 : 0, marginBottom: i < arr.length - 1 ? 10 : 0, borderBottom: i < arr.length - 1 ? '1px solid var(--border-2)' : 'none' }}>
-                  <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>{label}</span>
-                  <span style={{ fontSize: 14, fontWeight: 500, textAlign: 'right' as const, color: 'var(--text)' }}>{val}</span>
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingBottom: i < arr.length - 1 ? 10 : 0, marginBottom: i < arr.length - 1 ? 10 : 0, borderBottom: i < arr.length - 1 ? '1px solid var(--border-2)' : 'none' }}>
+                  <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', flexShrink: 0 }}>{label}</span>
+                  <span style={{ fontSize: 14, fontWeight: 500, textAlign: 'right' as const, color: 'var(--text)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val}</span>
                 </div>
               ))}
             </div>
