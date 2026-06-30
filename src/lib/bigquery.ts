@@ -153,6 +153,7 @@ async function fetchItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]
 
   // Step 2: resilient Retoure/Gutschrift lookup by products_id + orders_id
   const retourenByKey: Record<string, string> = {}
+  const retourenByOrderId: Record<string, string> = {}
   const gutschriftByKey: Record<string, string> = {}
   try {
     const [retRows] = await bq.query({
@@ -168,6 +169,21 @@ async function fetchItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]
     })
     for (const row of retRows as { products_id: string; orders_id: string; retouren_nr: string }[]) {
       retourenByKey[`${row.orders_id}:${row.products_id}`] = row.retouren_nr
+    }
+
+    // Fallback: order-level retoure (when atlos_retouren_products has no rows for this retoure)
+    const [orderRetRows] = await bq.query({
+      query: `
+        SELECT inv2.orders_id, ANY_VALUE(r.retouren_nr) AS retouren_nr
+        FROM ${table(T_RETOUREN)} r
+        JOIN ${table(T_INVOICE)} inv2 ON r.invoice_id = inv2.invoice_id
+        WHERE inv2.orders_id IN (${placeholders})
+        GROUP BY inv2.orders_id
+      `,
+      params: itemParams,
+    })
+    for (const row of orderRetRows as { orders_id: string; retouren_nr: string }[]) {
+      retourenByOrderId[String(row.orders_id)] = row.retouren_nr
     }
 
     const [gutRows] = await bq.query({
@@ -188,10 +204,10 @@ async function fetchItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]
     console.error('Retoure/Gutschrift lookup failed (non-fatal):', e)
   }
 
-  // Step 3: merge into items
+  // Step 3: merge into items (product-level match preferred, order-level fallback for retoure)
   for (const item of items as (BQItemRow & { orders_id: string | number })[]) {
     const key = `${item.orders_id}:${item.products_id}`
-    item.retouren_nr = retourenByKey[key] ?? null
+    item.retouren_nr = retourenByKey[key] ?? retourenByOrderId[String(item.orders_id)] ?? null
     item.gutschrift_nr = gutschriftByKey[key] ?? null
   }
 
