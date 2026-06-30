@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     const reason = escapeHtml(reasonLabel[item.reason] ?? item.reason)
     const resolution = item.resolution === 'erstattung' ? 'Erstattung' : 'Umtausch'
     const notes = item.notes ? ` · <em>${escapeHtml(item.notes)}</em>` : ''
-    return `<li><strong>${name}</strong><br/>${item.returnedQuantity}× · Zustand: ${cond} · Grund: ${reason} · ${resolution}${notes}</li>`
+    return `<li><strong>${name}</strong><br>${item.returnedQuantity}× · Zustand: ${cond} · Grund: ${reason} · ${resolution}${notes}</li>`
   }).join('\n')
 
   // Rechnungsnr: invoiceNr ist die echte Rechnungsnummer, invoiceNumber ist bs_nr (Bestellnr.)
@@ -104,8 +104,8 @@ export async function POST(request: Request) {
 
   if (!res.ok) {
     const err = await res.text()
-    console.error('Asana API error:', err)
-    return Response.json({ error: 'Asana-Einreichung fehlgeschlagen' }, { status: 502 })
+    console.error('Asana API error:', res.status, err)
+    return Response.json({ error: 'Asana-Einreichung fehlgeschlagen', status: res.status, detail: err }, { status: 502 })
   }
 
   const data = await res.json()
