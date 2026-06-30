@@ -460,6 +460,9 @@ export default function RetourenWizard() {
                         {selectedOrder.partnershop === 'amazon' && (
                           <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, background: '#ff9900', color: '#000', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em' }}>AMAZON</span>
                         )}
+                        {selectedOrder.partnershop === 'ebay' && (
+                          <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, background: '#e43137', color: '#fff', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em' }}>EBAY</span>
+                        )}
                       </div>
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>
                         #{selectedOrder.orderNumber}{selectedOrder.customerNumber ? ` · KD ${selectedOrder.customerNumber}` : ''}
@@ -519,6 +522,9 @@ export default function RetourenWizard() {
                             {order.customerName}
                             {order.partnershop === 'amazon' && (
                               <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, background: '#ff9900', color: '#000', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em' }}>AMAZON</span>
+                            )}
+                            {order.partnershop === 'ebay' && (
+                              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, background: '#e43137', color: '#fff', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em' }}>EBAY</span>
                             )}
                           </span>
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>{order.date}</span>

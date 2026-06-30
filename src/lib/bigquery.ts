@@ -83,6 +83,10 @@ function isAmazon(row: BQOrderRow): boolean {
   return false
 }
 
+function isEbay(row: BQOrderRow): boolean {
+  return !!(row.partnershop && row.partnershop.toLowerCase() === 'ebay')
+}
+
 function mapItem(item: BQItemRow, idx: number): OrderItem {
   return {
     id: String(item.invoice_products_id ?? idx),
@@ -124,7 +128,7 @@ function mapOrder(row: BQOrderRow, items: BQItemRow[]): Order {
     invoiceDateWarning,
     status: String(row.orders_status ?? ''),
     source: 'ATLOS',
-    partnershop: isAmazon(row) ? 'amazon' : (row.partnershop ?? undefined),
+    partnershop: isAmazon(row) ? 'amazon' : isEbay(row) ? 'ebay' : (row.partnershop ?? undefined),
     externOrderId: row.extern_orders_id ?? undefined,
     items: items.map((item, i) => mapItem(item, i)),
   }
