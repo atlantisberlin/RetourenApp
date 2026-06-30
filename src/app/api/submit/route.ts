@@ -1,5 +1,29 @@
 import type { ReturnCapture } from '@/lib/types'
 
+const conditionLabel: Record<string, string> = {
+  gut: 'Gut',
+  beschaedigt: 'Beschädigt',
+  unvollstaendig: 'Unvollständig',
+  defekt: 'Defekt',
+}
+
+const reasonLabel: Record<string, string> = {
+  gefaellt_nicht: 'Gefällt nicht',
+  falsch_geliefert: 'Falsch geliefert',
+  defekt_bei_ankunft: 'Defekt bei Ankunft',
+  groesse_passt_nicht: 'Größe passt nicht',
+  beschaedigt_bei_lieferung: 'Beschädigt bei Lieferung',
+  sonstiges: 'Sonstiges',
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
 export async function POST(request: Request) {
   const body: ReturnCapture = await request.json()
 
@@ -15,48 +39,48 @@ export async function POST(request: Request) {
     return Response.json({ success: true, mode: 'demo', taskId: 'DEMO-' + Date.now() })
   }
 
-  const date = new Date().toLocaleDateString('de-DE', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
-  const title = `Retoure – ${body.order.source ?? 'Atlantis'} – ${date} – ${body.order.orderNumber} – ${body.order.customerName}`
+  const date = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })
+  const source = body.order.source ?? 'Atlantis'
+
+  // Retourennummer: aus activeRetourenNr oder Platzhalter zum Nachtragen
+  const retourenNr = body.order.activeRetourenNr ?? '___________'
+
+  const title = `Retoure (${retourenNr}) – ${source} – ${date} – ${body.trackingNumber || '—'} – ${body.order.customerName}`
 
   const returnedItems = body.items.filter((i) => i.returned)
-  const itemLines = returnedItems.map((item) => {
-    const orderItem = body.order.items.find((i) => i.id === item.itemId)
-    const conditionLabel: Record<string, string> = {
-      gut: 'Gut',
-      beschaedigt: 'Beschädigt',
-      unvollstaendig: 'Unvollständig',
-      defekt: 'Defekt',
-    }
-    const reasonLabel: Record<string, string> = {
-      gefaellt_nicht: 'Gefällt nicht',
-      falsch_geliefert: 'Falsch geliefert',
-      defekt_bei_ankunft: 'Defekt bei Ankunft',
-      groesse_passt_nicht: 'Größe passt nicht',
-      beschaedigt_bei_lieferung: 'Beschädigt bei Lieferung',
-      sonstiges: 'Sonstiges',
-    }
-    return `• ${orderItem?.productName ?? item.itemId}: ${item.returnedQuantity}× — Zustand: ${conditionLabel[item.condition]} — Grund: ${reasonLabel[item.reason]} — ${item.resolution === 'erstattung' ? 'Erstattung' : 'Umtausch'}${item.notes ? ` (${item.notes})` : ''}`
-  })
 
-  const description = [
-    `Bearbeitet von: ${body.operatorName}`,
-    `Bestellnr.: ${body.order.orderNumber}`,
-    `Kundennr.: ${body.order.customerNumber}`,
-    `Kunde: ${body.order.customerName}`,
-    body.order.invoiceNumber ? `Rechnungsnr.: ${body.order.invoiceNumber}` : null,
-    body.packageService ? `Paketdienst: ${body.packageService}` : null,
-    body.trackingNumber ? `Tracking: ${body.trackingNumber}` : null,
-    '',
-    'Zurückgekommene Positionen:',
-    ...itemLines,
-    body.notes ? `\nBemerkungen: ${body.notes}` : null,
-  ]
-    .filter(Boolean)
-    .join('\n')
+  // ── html_notes ──────────────────────────────────────────────────────────────
+  const itemHtml = returnedItems.map((item) => {
+    const orderItem = body.order.items.find((i) => i.id === item.itemId)
+    const name = escapeHtml(orderItem?.productName ?? item.itemId)
+    const cond = escapeHtml(conditionLabel[item.condition] ?? item.condition)
+    const reason = escapeHtml(reasonLabel[item.reason] ?? item.reason)
+    const resolution = item.resolution === 'erstattung' ? 'Erstattung' : 'Umtausch'
+    const notes = item.notes ? ` · <em>${escapeHtml(item.notes)}</em>` : ''
+    return `<li><b>${name}</b><br/>${item.returnedQuantity}× · Zustand: ${cond} · Grund: ${reason} · ${resolution}${notes}</li>`
+  }).join('\n')
+
+  // Rechnungsnr: invoiceNr ist die echte Rechnungsnummer, invoiceNumber ist bs_nr (Bestellnr.)
+  const rechnungsNr = body.order.invoiceNr
+
+  const metaRows = [
+    `<li><b>Bearbeitet von:</b> ${escapeHtml(body.operatorName)}</li>`,
+    `<li><b>Bestellnr.:</b> <code>${escapeHtml(body.order.orderNumber)}</code></li>`,
+    `<li><b>Kundennr.:</b> <code>${escapeHtml(body.order.customerNumber)}</code></li>`,
+    `<li><b>Kunde:</b> ${escapeHtml(body.order.customerName)}</li>`,
+    rechnungsNr ? `<li><b>Rechnungsnr.:</b> <code>${escapeHtml(rechnungsNr)}</code></li>` : null,
+    body.order.deliveryNoteNumber ? `<li><b>Lieferscheinnr.:</b> <code>${escapeHtml(body.order.deliveryNoteNumber)}</code></li>` : null,
+    body.order.activeRetourenNr
+      ? `<li><b>Retourennr.:</b> <code>${escapeHtml(body.order.activeRetourenNr)}</code></li>`
+      : `<li><b>Retourennr.:</b> <code>___________</code> <em>(bitte nachtragen)</em></li>`,
+    body.trackingNumber ? `<li><b>Tracking:</b> <code>${escapeHtml(body.trackingNumber)}</code></li>` : null,
+  ].filter(Boolean).join('\n')
+
+  const bemerkungHtml = body.notes
+    ? `<h2>Bemerkungen</h2><p>${escapeHtml(body.notes)}</p>`
+    : ''
+
+  const html_notes = `<body><h2>Auftrag</h2><ul>${metaRows}</ul><h2>Zurückgekommene Positionen</h2><ul>${itemHtml}</ul>${bemerkungHtml}</body>`
 
   const res = await fetch('https://app.asana.com/api/1.0/tasks', {
     method: 'POST',
@@ -67,7 +91,7 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       data: {
         name: title,
-        notes: description,
+        html_notes,
         projects: [asanaProject],
         tags: [
           ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
@@ -87,12 +111,11 @@ export async function POST(request: Request) {
   const data = await res.json()
   const taskGid = data.data?.gid
 
-  // Upload photos as attachments if task was created and photos are present
+  // Fotos als Anhänge hochladen
   if (taskGid && body.photos && body.photos.length > 0) {
     for (let i = 0; i < body.photos.length; i++) {
       const photo = body.photos[i]
       try {
-        // Parse base64 data URL: "data:image/jpeg;base64,<data>"
         const matches = photo.dataUrl.match(/^data:([^;]+);base64,(.+)$/)
         if (!matches) continue
         const mimeType = matches[1]
@@ -101,8 +124,7 @@ export async function POST(request: Request) {
 
         const formData = new FormData()
         const blob = new Blob([buffer], { type: mimeType })
-        const fileName = `${photo.type}-${i + 1}.jpg`
-        formData.append('file', blob, fileName)
+        formData.append('file', blob, `${photo.type}-${i + 1}.jpg`)
 
         const attachRes = await fetch(`https://app.asana.com/api/1.0/tasks/${taskGid}/attachments`, {
           method: 'POST',
@@ -110,7 +132,7 @@ export async function POST(request: Request) {
           body: formData,
         })
         if (!attachRes.ok) {
-          console.error(`Foto-Upload fehlgeschlagen für ${fileName}:`, await attachRes.text())
+          console.error(`Foto-Upload fehlgeschlagen:`, await attachRes.text())
         }
       } catch (err) {
         console.error(`Fehler beim Upload von Foto ${i + 1}:`, err)
