@@ -18,6 +18,8 @@ type ArticleCapture = {
   condition: string | null
   reason: string | null
   photo: Photo | null
+  existingRetoure?: string | null
+  existingGutschrift?: string | null
 }
 
 const CONDITIONS: { value: ReturnCondition; label: string }[] = [
@@ -109,6 +111,8 @@ export default function RetourenWizard() {
       condition: null as string | null,
       reason: null as string | null,
       photo: null as Photo | null,
+      existingRetoure: item.existingRetoure ?? null,
+      existingGutschrift: item.existingGutschrift ?? null,
     }))
     if (pendingArticlesRef.current) {
       const saved = pendingArticlesRef.current
@@ -141,7 +145,7 @@ export default function RetourenWizard() {
   const isStep1Valid = trackingNumber.trim().length > 3
   const isStep2Valid = selectedOrder !== null
   const isStep3Valid = articles.length > 0 &&
-    articles.every(a => a.returned !== null) &&
+    articles.every(a => a.returned !== null || !!a.existingGutschrift) &&
     articles.filter(a => a.returned === true).every(a => a.condition !== null && a.reason !== null)
   const isNextEnabled = step === 1 ? isStep1Valid : step === 2 ? isStep2Valid : step === 3 ? isStep3Valid : true
 
@@ -658,13 +662,26 @@ type ArticleRowProps = {
 
 function ArticleRow({ article, onToggleReturned, onCondition, onReason, onCapturePhoto, onRemovePhoto }: ArticleRowProps) {
   const ret = article.returned
+  const hasGutschrift = !!article.existingGutschrift
+  const hasRetoure = !!article.existingRetoure && !hasGutschrift
+
+  const borderColor = hasGutschrift
+    ? 'var(--border)'
+    : hasRetoure
+    ? 'var(--blue-border)'
+    : ret === true
+    ? 'var(--blue-border)'
+    : 'var(--border)'
 
   return (
     <div style={{
       background: 'var(--surface)',
-      border: `1.5px solid ${ret === true ? 'var(--blue-border)' : ret === false ? 'var(--border)' : 'var(--border)'}`,
+      border: `1.5px solid ${borderColor}`,
+      borderLeft: hasRetoure ? '3px solid var(--blue)' : undefined,
       borderRadius: 12,
       overflow: 'hidden',
+      opacity: hasGutschrift ? 0.55 : 1,
+      pointerEvents: hasGutschrift ? 'none' : 'auto',
     }}>
       {/* Main row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px' }}>
@@ -677,15 +694,25 @@ function ArticleRow({ article, onToggleReturned, onCondition, onReason, onCaptur
           )}
         </div>
 
-        {/* Name + qty */}
+        {/* Name + qty + badges */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {article.productName}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             {article.orderedQty}× bestellt
-            {ret === true && article.condition && article.reason && (
-              <span style={{ color: 'var(--green)', marginLeft: 6 }}>✓</span>
+            {ret === true && article.condition && article.reason && !hasGutschrift && (
+              <span style={{ color: 'var(--green)' }}>✓</span>
+            )}
+            {hasRetoure && (
+              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', background: 'var(--blue-bg)', border: '1px solid var(--blue-border)', borderRadius: 4, padding: '1px 5px', color: 'var(--blue)', fontWeight: 600 }}>
+                RET {article.existingRetoure}
+              </span>
+            )}
+            {hasGutschrift && (
+              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', color: 'var(--text-muted)', fontWeight: 600 }}>
+                GS {article.existingGutschrift}
+              </span>
             )}
           </div>
         </div>
