@@ -18,6 +18,8 @@ const reasonLabel: Record<string, string> = {
 
 function escapeHtml(str: string): string {
   return str
+    // strip characters invalid in XML 1.0 (control chars except tab/LF/CR)
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
