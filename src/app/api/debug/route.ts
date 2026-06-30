@@ -287,6 +287,24 @@ export async function GET(request: Request) {
     return { count: rows.length, rows }
   }))
 
+  // Schritt 11: Lieferschein-Suche über xanario_shop
+  if (q.trim()) {
+    steps.push(await runStep('11_packingslip', async () => {
+      const xDataset = process.env.BQ_XANARIO_DATASET ?? 'xanario_shop'
+      const xPackingslip = `\`${PROJECT}.${xDataset}.shop_packingslip\``
+      const xOrders = `\`${PROJECT}.${xDataset}.shop_orders\``
+      const [rows] = await bq.query({
+        query: `SELECT xp.packingslip_nr, xp.orders_id AS xanario_orders_id, xo.extern_orders_id AS atlos_bs_nr
+                FROM ${xPackingslip} xp
+                JOIN ${xOrders} xo ON xp.orders_id = xo.orders_id
+                WHERE xp.packingslip_nr = @q
+                LIMIT 5`,
+        params: { q: q.trim() },
+      })
+      return { count: rows.length, rows }
+    }))
+  }
+
   const allOk = steps.every((s) => (s as { ok: boolean }).ok)
   return Response.json({ allOk, dataset: `${PROJECT}.${DATASET}`, query: q, targetId, steps })
 }
