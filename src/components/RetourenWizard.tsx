@@ -640,6 +640,24 @@ export default function RetourenWizard() {
               />
             </div>
 
+            {/* Asana-Tags Vorschau */}
+            {(isDhlReturn || selectedOrder.partnershop === 'amazon' || selectedOrder.partnershop === 'ebay') && (
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', display: 'block', marginBottom: 8 }}>ASANA-TAGS</label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {isDhlReturn && (
+                    <span style={{ fontSize: 12, fontWeight: 700, background: '#FFCC00', color: '#000', borderRadius: 5, padding: '3px 10px' }}>DHL Retoure</span>
+                  )}
+                  {selectedOrder.partnershop === 'amazon' && (
+                    <span style={{ fontSize: 12, fontWeight: 700, background: '#FF9900', color: '#000', borderRadius: 5, padding: '3px 10px' }}>Amazon</span>
+                  )}
+                  {selectedOrder.partnershop === 'ebay' && (
+                    <span style={{ fontSize: 12, fontWeight: 700, background: '#E43137', color: '#fff', borderRadius: 5, padding: '3px 10px' }}>eBay</span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {error && (
               <div style={{ border: '1px solid var(--red-border)', background: 'var(--red-bg)', borderRadius: 10, padding: '14px 16px', marginBottom: 16, fontSize: 14, color: 'var(--red-dark)' }}>
                 Fehler: {error}
