@@ -365,6 +365,50 @@ export async function getOrderByRetourenNr(retourenNr: string): Promise<Order | 
   }
 }
 
+const T_XANARIO_PRODUCTS = process.env.BQ_TABLE_XANARIO_PRODUCTS ?? 'shop_products'
+const T_XANARIO_PRODUCTS_DESC = process.env.BQ_TABLE_XANARIO_PRODUCTS_DESC ?? 'shop_products_description'
+
+export async function searchProducts(query: string): Promise<{ productId: string; name: string; sku?: string; ean?: string; imageUrl?: string }[]> {
+  const bq = getClient()
+  if (!bq) return []
+
+  const q = query.trim()
+  if (!q) return []
+
+  const [rows] = await bq.query({
+    query: `
+      SELECT
+        p.products_id,
+        pd.products_name,
+        p.products_model,
+        p.sku,
+        p.products_ean,
+        p.products_image
+      FROM ${xTable(T_XANARIO_PRODUCTS)} p
+      JOIN (
+        SELECT products_id, ANY_VALUE(products_name) AS products_name
+        FROM ${xTable(T_XANARIO_PRODUCTS_DESC)}
+        GROUP BY products_id
+      ) pd ON p.products_id = pd.products_id
+      WHERE
+        p.products_model = @q OR
+        p.sku = @q OR
+        p.products_ean = @q OR
+        LOWER(pd.products_name) LIKE LOWER(@name)
+      LIMIT 15
+    `,
+    params: { q, name: `%${q}%` },
+  })
+
+  return (rows as { products_id: string; products_name: string; products_model?: string; sku?: string; products_ean?: string; products_image?: string }[]).map(r => ({
+    productId: String(r.products_id),
+    name: r.products_name ?? '—',
+    sku: r.products_model ?? r.sku ?? undefined,
+    ean: r.products_ean ?? undefined,
+    imageUrl: r.products_image ? IMAGE_BASE + r.products_image : undefined,
+  }))
+}
+
 export function isBigQueryConfigured(): boolean {
   return !!(
     process.env.GOOGLE_APPLICATION_CREDENTIALS ||

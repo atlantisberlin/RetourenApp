@@ -41,6 +41,13 @@ export type ReturnReason =
   | 'sonstiges'
 export type ReturnResolution = 'erstattung' | 'umtausch'
 
+export type ReplacementProduct = {
+  productId: string
+  name: string
+  sku?: string
+  ean?: string
+}
+
 export type ReturnItemCapture = {
   itemId: string
   returned: boolean
@@ -49,6 +56,7 @@ export type ReturnItemCapture = {
   reason: ReturnReason
   resolution: ReturnResolution
   notes: string
+  replacementProduct?: ReplacementProduct | null
 }
 
 export type ReturnCapture = {
