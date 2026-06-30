@@ -111,6 +111,36 @@ export async function POST(request: Request) {
   const data = await res.json()
   const taskGid = data.data?.gid
 
+  // Unteraufgaben als Workflow-Checkliste
+  if (taskGid) {
+    const hasErstattung = returnedItems.some((i) => i.resolution === 'erstattung')
+    const hasUmtausch = returnedItems.some((i) => i.resolution === 'umtausch')
+
+    const subtasks: { name: string; completed: boolean }[] = [
+      { name: `Paket angenommen – von: ${body.operatorName}`, completed: true },
+      body.order.activeRetourenNr
+        ? { name: `Retoure angelegt (${body.order.activeRetourenNr}) – von: ATLOS-Kunde`, completed: true }
+        : { name: 'Retoure angelegt – von: ___', completed: false },
+      ...(hasErstattung ? [{ name: 'Gutschrift geschrieben – von: ___', completed: false }] : []),
+      ...(hasUmtausch ? [{ name: 'Umtausch gemacht – von: ___', completed: false }] : []),
+    ]
+
+    for (const subtask of subtasks) {
+      try {
+        const subRes = await fetch('https://app.asana.com/api/1.0/tasks', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${asanaToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: { name: subtask.name, completed: subtask.completed, parent: taskGid } }),
+        })
+        if (!subRes.ok) {
+          console.error('Unteraufgabe fehlgeschlagen:', await subRes.text())
+        }
+      } catch (err) {
+        console.error('Fehler beim Anlegen der Unteraufgabe:', err)
+      }
+    }
+  }
+
   // Fotos als Anhänge hochladen
   if (taskGid && body.photos && body.photos.length > 0) {
     for (let i = 0; i < body.photos.length; i++) {
