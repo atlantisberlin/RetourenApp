@@ -34,6 +34,8 @@ export async function POST(request: Request) {
   const dhlTagGid = process.env.ASANA_DHL_TAG_GID
   const amazonTagGid = process.env.ASANA_AMAZON_TAG_GID ?? '1205680122433653'
   const ebayTagGid = process.env.ASANA_EBAY_TAG_GID ?? '1203021580329302'
+  const erstattungTagGid = process.env.ASANA_ERSTATTUNG_TAG_GID ?? '1216149276322551'
+  const umtauschTagGid = process.env.ASANA_UMTAUSCH_TAG_GID ?? '1208092258165924'
 
   if (!asanaToken || !asanaProject) {
     console.log('[demo] Asana nicht konfiguriert — simuliere Einreichung:', body.orderId)
@@ -59,7 +61,10 @@ export async function POST(request: Request) {
     const reason = escapeHtml(reasonLabel[item.reason] ?? item.reason)
     const resolution = item.resolution === 'erstattung' ? 'Erstattung' : 'Umtausch'
     const notes = item.notes ? ` - <em>${escapeHtml(item.notes)}</em>` : ''
-    return `<li><strong>${name}</strong> | ${item.returnedQuantity}x - Zustand: ${cond} - Grund: ${reason} - ${resolution}${notes}</li>`
+    const repl = item.replacementProduct
+      ? ` - Umtausch gegen: ${escapeHtml(item.replacementProduct.name)}${item.replacementProduct.sku ? ` (${escapeHtml(item.replacementProduct.sku)})` : ''}`
+      : ''
+    return `<li><strong>${name}</strong> | ${item.returnedQuantity}x - Zustand: ${cond} - Grund: ${reason} - ${resolution}${repl}${notes}</li>`
   }).join('\n')
 
   // Rechnungsnr: invoiceNr ist die echte Rechnungsnummer, invoiceNumber ist bs_nr (Bestellnr.)
@@ -101,6 +106,8 @@ export async function POST(request: Request) {
           ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
           ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
           ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
+          ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
+          ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
         ],
       },
     }),

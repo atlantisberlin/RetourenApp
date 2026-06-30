@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { getOperator, refreshActivity } from '@/lib/operator'
 import { addToHistory } from '@/lib/history'
-import type { Order, OrderItem, ReturnCapture, ReturnCondition, ReturnReason, ReturnResolution } from '@/lib/types'
+import type { Order, OrderItem, ReturnCapture, ReturnCondition, ReturnReason, ReturnResolution, ReplacementProduct } from '@/lib/types'
 import UserSelectionScreen from '@/components/UserSelectionScreen'
 
 type Photo = { id: string; dataUrl: string; name: string; type: string }
@@ -17,6 +17,8 @@ type ArticleCapture = {
   returned: boolean | null
   condition: string | null
   reason: string | null
+  resolution: 'erstattung' | 'umtausch' | null
+  replacementProduct: ReplacementProduct | null
   photo: Photo | null
   existingRetoure?: string | null
   existingGutschrift?: string | null
@@ -110,6 +112,8 @@ export default function RetourenWizard() {
       returned: null as boolean | null,
       condition: null as string | null,
       reason: null as string | null,
+      resolution: null as 'erstattung' | 'umtausch' | null,
+      replacementProduct: null as ReplacementProduct | null,
       photo: null as Photo | null,
       existingRetoure: item.existingRetoure ?? null,
       existingGutschrift: item.existingGutschrift ?? null,
@@ -146,7 +150,7 @@ export default function RetourenWizard() {
   const isStep2Valid = selectedOrder !== null
   const isStep3Valid = articles.length > 0 &&
     articles.every(a => a.returned !== null || !!a.existingGutschrift) &&
-    articles.filter(a => a.returned === true).every(a => a.condition !== null && a.reason !== null)
+    articles.filter(a => a.returned === true).every(a => a.condition !== null && a.reason !== null && a.resolution !== null)
   const isNextEnabled = step === 1 ? isStep1Valid : step === 2 ? isStep2Valid : step === 3 ? isStep3Valid : true
 
   const handleNext = () => {
@@ -224,8 +228,9 @@ export default function RetourenWizard() {
           returnedQuantity: a.returned === true ? a.orderedQty : 0,
           condition: (a.condition ?? 'gut') as ReturnCondition,
           reason: (a.reason ?? 'sonstiges') as ReturnReason,
-          resolution: 'erstattung' as ReturnResolution,
+          resolution: (a.resolution ?? 'erstattung') as ReturnResolution,
           notes: '',
+          replacementProduct: a.replacementProduct ?? null,
         })),
         trackingNumber: trackingNumber.trim(),
         packageService: '',
@@ -572,9 +577,11 @@ export default function RetourenWizard() {
                 <ArticleRow
                   key={art.itemId}
                   article={art}
-                  onToggleReturned={(val) => updateArticle(idx, val ? { returned: true } : { returned: false, condition: null, reason: null, photo: null })}
+                  onToggleReturned={(val) => updateArticle(idx, val ? { returned: true } : { returned: false, condition: null, reason: null, resolution: null, replacementProduct: null, photo: null })}
                   onCondition={(val) => updateArticle(idx, { condition: val })}
                   onReason={(val) => updateArticle(idx, { reason: val })}
+                  onResolution={(val) => updateArticle(idx, { resolution: val })}
+                  onReplacementProduct={(val) => updateArticle(idx, { replacementProduct: val })}
                   onCapturePhoto={() => capturePhoto(idx)}
                   onRemovePhoto={() => updateArticle(idx, { photo: null })}
                 />
@@ -690,11 +697,32 @@ type ArticleRowProps = {
   onToggleReturned: (val: boolean) => void
   onCondition: (val: string) => void
   onReason: (val: string) => void
+  onResolution: (val: 'erstattung' | 'umtausch') => void
+  onReplacementProduct: (val: ReplacementProduct | null) => void
   onCapturePhoto: () => void
   onRemovePhoto: () => void
 }
 
-function ArticleRow({ article, onToggleReturned, onCondition, onReason, onCapturePhoto, onRemovePhoto }: ArticleRowProps) {
+function ArticleRow({ article, onToggleReturned, onCondition, onReason, onResolution, onReplacementProduct, onCapturePhoto, onRemovePhoto }: ArticleRowProps) {
+  const [productQuery, setProductQuery] = React.useState('')
+  const [productResults, setProductResults] = React.useState<ReplacementProduct[]>([])
+  const [productSearching, setProductSearching] = React.useState(false)
+  const productSearchTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleProductSearch = (q: string) => {
+    setProductQuery(q)
+    if (productSearchTimer.current) clearTimeout(productSearchTimer.current)
+    if (q.trim().length < 2) { setProductResults([]); return }
+    productSearchTimer.current = setTimeout(async () => {
+      setProductSearching(true)
+      try {
+        const res = await fetch(`/api/search-products?q=${encodeURIComponent(q)}`)
+        const data = await res.json()
+        setProductResults(data.products ?? [])
+      } catch { setProductResults([]) }
+      setProductSearching(false)
+    }, 350)
+  }
   const ret = article.returned
   const hasGutschrift = !!article.existingGutschrift
   const hasRetoure = !!article.existingRetoure && !hasGutschrift
@@ -735,7 +763,7 @@ function ArticleRow({ article, onToggleReturned, onCondition, onReason, onCaptur
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             {article.orderedQty}× bestellt
-            {ret === true && article.condition && article.reason && !hasGutschrift && (
+            {ret === true && article.condition && article.reason && article.resolution && !hasGutschrift && (
               <span style={{ color: 'var(--green)' }}>✓</span>
             )}
             {hasRetoure && (
@@ -822,6 +850,70 @@ function ArticleRow({ article, onToggleReturned, onCondition, onReason, onCaptur
               {REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
           </div>
+
+          {/* Lösung */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', width: 56, flexShrink: 0 }}>LÖSUNG</span>
+            <div style={{ display: 'flex', gap: 6, flex: 1 }}>
+              {(['erstattung', 'umtausch'] as const).map(r => (
+                <button
+                  key={r}
+                  onClick={() => { onResolution(r); if (r === 'erstattung') onReplacementProduct(null) }}
+                  style={{
+                    flex: 1, padding: '7px 10px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    border: `1.5px solid ${article.resolution === r ? 'var(--blue)' : 'var(--border)'}`,
+                    background: article.resolution === r ? 'var(--blue)' : 'var(--surface)',
+                    color: article.resolution === r ? 'white' : 'var(--text-3)',
+                    transition: 'all 0.12s',
+                  }}
+                >
+                  {r === 'erstattung' ? 'Erstattung' : 'Umtausch'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Umtausch-Artikel suchen */}
+          {article.resolution === 'umtausch' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', width: 56, flexShrink: 0 }}>ARTIKEL</span>
+                {article.replacementProduct ? (
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 7, background: 'var(--blue-bg)', border: '1.5px solid var(--blue-border)' }}>
+                    <span style={{ flex: 1, fontSize: 13, color: 'var(--blue)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {article.replacementProduct.name}
+                      {article.replacementProduct.sku && <span style={{ color: 'var(--text-muted)', marginLeft: 6, fontSize: 11 }}>{article.replacementProduct.sku}</span>}
+                    </span>
+                    <button onClick={() => { onReplacementProduct(null); setProductQuery(''); setProductResults([]) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18, padding: '0 2px', lineHeight: 1 }}>×</button>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="Artikelname, SKU oder EAN …"
+                    value={productQuery}
+                    onChange={e => handleProductSearch(e.target.value)}
+                    style={{ flex: 1, padding: '7px 10px', borderRadius: 7, fontSize: 13, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', outline: 'none', fontFamily: 'var(--font-sans)' }}
+                  />
+                )}
+              </div>
+              {!article.replacementProduct && productResults.length > 0 && (
+                <div style={{ marginLeft: 66, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', overflow: 'hidden' }}>
+                  {productResults.map(p => (
+                    <button
+                      key={p.productId}
+                      onClick={() => { onReplacementProduct(p); setProductQuery(''); setProductResults([]) }}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', background: 'none', border: 'none', borderBottom: '1px solid var(--border-2)', cursor: 'pointer', fontSize: 13 }}
+                    >
+                      <span style={{ fontWeight: 500, color: 'var(--text)' }}>{p.name}</span>
+                      {p.sku && <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 11, fontFamily: 'var(--font-mono)' }}>{p.sku}</span>}
+                      {p.ean && <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 11, fontFamily: 'var(--font-mono)' }}>{p.ean}</span>}
+                    </button>
+                  ))}
+                  {productSearching && <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>Suche …</div>}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Foto */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
