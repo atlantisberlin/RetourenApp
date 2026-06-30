@@ -65,15 +65,15 @@ export async function POST(request: Request) {
 
   const metaRows = [
     `<li><strong>Bearbeitet von:</strong> ${escapeHtml(body.operatorName)}</li>`,
-    `<li><strong>Bestellnr.:</strong> <code>${escapeHtml(body.order.orderNumber)}</code></li>`,
-    `<li><strong>Kundennr.:</strong> <code>${escapeHtml(body.order.customerNumber)}</code></li>`,
+    `<li><strong>Bestellnr.:</strong> ${escapeHtml(body.order.orderNumber)}</li>`,
+    `<li><strong>Kundennr.:</strong> ${escapeHtml(body.order.customerNumber)}</li>`,
     `<li><strong>Kunde:</strong> ${escapeHtml(body.order.customerName)}</li>`,
-    rechnungsNr ? `<li><strong>Rechnungsnr.:</strong> <code>${escapeHtml(rechnungsNr)}</code></li>` : null,
-    body.order.deliveryNoteNumber ? `<li><strong>Lieferscheinnr.:</strong> <code>${escapeHtml(body.order.deliveryNoteNumber)}</code></li>` : null,
+    rechnungsNr ? `<li><strong>Rechnungsnr.:</strong> ${escapeHtml(rechnungsNr)}</li>` : null,
+    body.order.deliveryNoteNumber ? `<li><strong>Lieferscheinnr.:</strong> ${escapeHtml(body.order.deliveryNoteNumber)}</li>` : null,
     body.order.activeRetourenNr
-      ? `<li><strong>Retourennr.:</strong> <code>${escapeHtml(body.order.activeRetourenNr)}</code></li>`
-      : `<li><strong>Retourennr.:</strong> <code>___________</code> <em>(bitte nachtragen)</em></li>`,
-    body.trackingNumber ? `<li><strong>Tracking:</strong> <code>${escapeHtml(body.trackingNumber)}</code></li>` : null,
+      ? `<li><strong>Retourennr.:</strong> ${escapeHtml(body.order.activeRetourenNr)}</li>`
+      : `<li><strong>Retourennr.:</strong> ___________ <em>(bitte nachtragen)</em></li>`,
+    body.trackingNumber ? `<li><strong>Tracking:</strong> ${escapeHtml(body.trackingNumber)}</li>` : null,
   ].filter(Boolean).join('\n')
 
   const bemerkungHtml = body.notes
@@ -81,6 +81,8 @@ export async function POST(request: Request) {
     : ''
 
   const html_notes = `<body><h2>Auftrag</h2><ul>${metaRows}</ul><h2>Zurückgekommene Positionen</h2><ul>${itemHtml}</ul>${bemerkungHtml}</body>`
+
+  console.log('[Asana] html_notes:', html_notes)
 
   const res = await fetch('https://app.asana.com/api/1.0/tasks', {
     method: 'POST',
