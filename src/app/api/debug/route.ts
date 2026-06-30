@@ -146,7 +146,7 @@ export async function GET(request: Request) {
       const [rows] = await bq.query({
         query: `SELECT rp.products_id, rp.products_name, r.retouren_nr, r.invoice_id
                 FROM ${table(T_RETOUREN_PRODUCTS)} rp
-                JOIN ${table(T_RETOUREN)} r ON rp.retouren_id = r.retouren_id
+                JOIN ${table(T_RETOUREN)} r ON rp.retouren_products_id = r.retouren_id
                 JOIN ${table(T_INVOICE)} inv ON r.invoice_id = inv.invoice_id
                 WHERE inv.orders_id = @id`,
         params: { id: String(targetId) },
@@ -202,7 +202,7 @@ export async function GET(request: Request) {
       const ridParams: Record<string, string> = {}
       rids.forEach((rid, i) => { ridParams[`rid${i}`] = String(rid) })
       const [rpRows] = await bq.query({
-        query: `SELECT * FROM ${table(T_RETOUREN_PRODUCTS)} WHERE retouren_id IN (${ridPlaceholders}) LIMIT 20`,
+        query: `SELECT * FROM ${table(T_RETOUREN_PRODUCTS)} WHERE retouren_products_id IN (${ridPlaceholders}) LIMIT 20`,
         params: ridParams,
       })
       return { retouren: rRows, retouren_products: rpRows }
