@@ -455,7 +455,15 @@ export default function RetourenWizard() {
                 <div style={{ padding: '16px 18px', background: 'var(--surface)', border: '2px solid var(--blue)', borderRadius: 14, marginBottom: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2 }}>{selectedOrder.customerName}</div>
+                      <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {selectedOrder.customerName}
+                        {selectedOrder.partnershop === 'amazon' && (
+                          <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, background: '#ff9900', color: '#000', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em' }}>AMAZON</span>
+                        )}
+                        {selectedOrder.partnershop === 'ebay' && (
+                          <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, background: '#e43137', color: '#fff', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em' }}>EBAY</span>
+                        )}
+                      </div>
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>
                         #{selectedOrder.orderNumber}{selectedOrder.customerNumber ? ` · KD ${selectedOrder.customerNumber}` : ''}
                       </div>
@@ -510,7 +518,15 @@ export default function RetourenWizard() {
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)' }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ fontWeight: 600, fontSize: 15 }}>{order.customerName}</span>
+                          <span style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {order.customerName}
+                            {order.partnershop === 'amazon' && (
+                              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, background: '#ff9900', color: '#000', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em' }}>AMAZON</span>
+                            )}
+                            {order.partnershop === 'ebay' && (
+                              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, background: '#e43137', color: '#fff', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em' }}>EBAY</span>
+                            )}
+                          </span>
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>{order.date}</span>
                         </div>
                         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
