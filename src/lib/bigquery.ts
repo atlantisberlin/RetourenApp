@@ -375,6 +375,12 @@ export async function searchProducts(query: string): Promise<{ productId: string
   const q = query.trim()
   if (!q) return []
 
+  // Split into words for fuzzy AND-matching (each word must appear in name)
+  const words = q.split(/\s+/).filter(Boolean)
+  const wordConditions = words.map((_, i) => `LOWER(pd.products_name) LIKE LOWER(@w${i})`).join(' AND ')
+  const wordParams: Record<string, string> = {}
+  words.forEach((w, i) => { wordParams[`w${i}`] = `%${w}%` })
+
   const [rows] = await bq.query({
     query: `
       SELECT
@@ -394,10 +400,10 @@ export async function searchProducts(query: string): Promise<{ productId: string
         p.products_model = @q OR
         p.sku = @q OR
         p.products_ean = @q OR
-        LOWER(pd.products_name) LIKE LOWER(@name)
+        (${wordConditions})
       LIMIT 15
     `,
-    params: { q, name: `%${q}%` },
+    params: { q, ...wordParams },
   })
 
   return (rows as { products_id: string; products_name: string; products_model?: string; sku?: string; products_ean?: string; products_image?: string }[]).map(r => ({

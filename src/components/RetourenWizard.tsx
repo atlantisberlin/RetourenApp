@@ -15,6 +15,7 @@ type ArticleCapture = {
   imageUrl?: string
   orderedQty: number
   returned: boolean | null
+  returnedQuantity: number | null
   condition: string | null
   reason: string | null
   resolution: 'erstattung' | 'umtausch' | null
@@ -110,6 +111,7 @@ export default function RetourenWizard() {
       imageUrl: item.imageUrl,
       orderedQty: item.quantity,
       returned: null as boolean | null,
+      returnedQuantity: null as number | null,
       condition: null as string | null,
       reason: null as string | null,
       resolution: null as 'erstattung' | 'umtausch' | null,
@@ -225,7 +227,7 @@ export default function RetourenWizard() {
         items: articles.map(a => ({
           itemId: a.itemId,
           returned: a.returned === true,
-          returnedQuantity: a.returned === true ? a.orderedQty : 0,
+          returnedQuantity: a.returned === true ? (a.returnedQuantity ?? a.orderedQty) : 0,
           condition: (a.condition ?? 'gut') as ReturnCondition,
           reason: (a.reason ?? 'sonstiges') as ReturnReason,
           resolution: (a.resolution ?? 'erstattung') as ReturnResolution,
@@ -577,7 +579,8 @@ export default function RetourenWizard() {
                 <ArticleRow
                   key={art.itemId}
                   article={art}
-                  onToggleReturned={(val) => updateArticle(idx, val ? { returned: true } : { returned: false, condition: null, reason: null, resolution: null, replacementProduct: null, photo: null })}
+                  onToggleReturned={(val) => updateArticle(idx, val ? { returned: true } : { returned: false, returnedQuantity: null, condition: null, reason: null, resolution: null, replacementProduct: null, photo: null })}
+                  onQuantity={(val) => updateArticle(idx, { returnedQuantity: val })}
                   onCondition={(val) => updateArticle(idx, { condition: val })}
                   onReason={(val) => updateArticle(idx, { reason: val })}
                   onResolution={(val) => updateArticle(idx, { resolution: val })}
@@ -695,6 +698,7 @@ export default function RetourenWizard() {
 type ArticleRowProps = {
   article: ArticleCapture
   onToggleReturned: (val: boolean) => void
+  onQuantity: (val: number) => void
   onCondition: (val: string) => void
   onReason: (val: string) => void
   onResolution: (val: 'erstattung' | 'umtausch') => void
@@ -703,7 +707,7 @@ type ArticleRowProps = {
   onRemovePhoto: () => void
 }
 
-function ArticleRow({ article, onToggleReturned, onCondition, onReason, onResolution, onReplacementProduct, onCapturePhoto, onRemovePhoto }: ArticleRowProps) {
+function ArticleRow({ article, onToggleReturned, onQuantity, onCondition, onReason, onResolution, onReplacementProduct, onCapturePhoto, onRemovePhoto }: ArticleRowProps) {
   const [productQuery, setProductQuery] = React.useState('')
   const [productResults, setProductResults] = React.useState<ReplacementProduct[]>([])
   const [productSearching, setProductSearching] = React.useState(false)
@@ -811,6 +815,26 @@ function ArticleRow({ article, onToggleReturned, onCondition, onReason, onResolu
       {/* Expanded details */}
       {ret === true && (
         <div style={{ borderTop: '1px solid var(--border-2)', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8, background: 'var(--surface-2)' }}>
+          {/* Menge */}
+          {article.orderedQty > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', width: 56, flexShrink: 0 }}>MENGE</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={() => onQuantity(Math.max(1, (article.returnedQuantity ?? article.orderedQty) - 1))}
+                  style={{ width: 32, height: 32, borderRadius: 6, border: '1.5px solid var(--border)', background: 'var(--surface)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-2)', flexShrink: 0 }}
+                >−</button>
+                <span style={{ fontSize: 15, fontWeight: 600, minWidth: 60, textAlign: 'center', color: 'var(--text)' }}>
+                  {article.returnedQuantity ?? article.orderedQty} / {article.orderedQty}
+                </span>
+                <button
+                  onClick={() => onQuantity(Math.min(article.orderedQty, (article.returnedQuantity ?? article.orderedQty) + 1))}
+                  style={{ width: 32, height: 32, borderRadius: 6, border: '1.5px solid var(--border)', background: 'var(--surface)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-2)', flexShrink: 0 }}
+                >+</button>
+              </div>
+            </div>
+          )}
+
           {/* Zustand */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', width: 56, flexShrink: 0 }}>ZUSTAND</span>
