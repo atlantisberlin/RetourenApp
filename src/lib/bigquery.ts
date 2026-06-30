@@ -159,7 +159,7 @@ async function fetchItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]
       query: `
         SELECT rp.products_id, inv2.orders_id, ANY_VALUE(r.retouren_nr) AS retouren_nr
         FROM ${table(T_RETOUREN_PRODUCTS)} rp
-        JOIN ${table(T_RETOUREN)} r ON rp.retouren_id = r.retouren_id
+        JOIN ${table(T_RETOUREN)} r ON rp.retouren_products_id = r.retouren_id
         JOIN ${table(T_INVOICE)} inv2 ON r.invoice_id = inv2.invoice_id
         WHERE inv2.orders_id IN (${placeholders})
         GROUP BY rp.products_id, inv2.orders_id
