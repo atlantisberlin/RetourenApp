@@ -122,13 +122,14 @@ function mapOrder(row: BQOrderRow, items: BQItemRow[]): Order {
   }
 }
 
-// Fetches invoice_products with inline retoure/gutschrift for a set of orders_ids
+// Fetches invoice_products for a set of orders_ids, with separate resilient Retoure/Gutschrift lookup
 async function fetchItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]> {
   const placeholders = orderIds.map((_, i) => `@id${i}`).join(',')
   const itemParams: Record<string, string> = {}
   orderIds.forEach((id, i) => { itemParams[`id${i}`] = id })
 
-  const sql = `
+  // Step 1: get invoice products (immutable — not zeroed by Gutschrift)
+  const itemSql = `
     SELECT
       ip.invoice_products_id,
       inv.orders_id,
@@ -137,39 +138,9 @@ async function fetchItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]
       ip.products_model,
       ip.final_price,
       ip.products_quantity,
-      p.products_image,
-      COALESCE(ret_id.retouren_nr, ret_pid.retouren_nr) AS retouren_nr,
-      COALESCE(gut_id.gutschrift_nr, gut_pid.gutschrift_nr) AS gutschrift_nr
+      p.products_image
     FROM ${table(T_INVOICE_PRODUCTS)} ip
     JOIN ${table(T_INVOICE)} inv ON ip.invoice_id = inv.invoice_id
-    LEFT JOIN (
-      SELECT rp.invoice_products_id, ANY_VALUE(r.retouren_nr) AS retouren_nr
-      FROM ${table(T_RETOUREN_PRODUCTS)} rp
-      JOIN ${table(T_RETOUREN)} r ON rp.retouren_id = r.retouren_id
-      WHERE rp.invoice_products_id IS NOT NULL
-      GROUP BY rp.invoice_products_id
-    ) ret_id ON ip.invoice_products_id = ret_id.invoice_products_id
-    LEFT JOIN (
-      SELECT rp.products_id, inv2.orders_id, ANY_VALUE(r.retouren_nr) AS retouren_nr
-      FROM ${table(T_RETOUREN_PRODUCTS)} rp
-      JOIN ${table(T_RETOUREN)} r ON rp.retouren_id = r.retouren_id
-      JOIN ${table(T_INVOICE)} inv2 ON r.invoice_id = inv2.invoice_id
-      GROUP BY rp.products_id, inv2.orders_id
-    ) ret_pid ON ip.products_id = ret_pid.products_id AND inv.orders_id = ret_pid.orders_id
-    LEFT JOIN (
-      SELECT gp.invoice_products_id, ANY_VALUE(g.gutschrift_nr) AS gutschrift_nr
-      FROM ${table(T_GUTSCHRIFT_PRODUCTS)} gp
-      JOIN ${table(T_GUTSCHRIFT)} g ON gp.gutschrift_id = g.gutschrift_id
-      WHERE gp.invoice_products_id IS NOT NULL
-      GROUP BY gp.invoice_products_id
-    ) gut_id ON ip.invoice_products_id = gut_id.invoice_products_id
-    LEFT JOIN (
-      SELECT gp.products_id, inv2.orders_id, ANY_VALUE(g.gutschrift_nr) AS gutschrift_nr
-      FROM ${table(T_GUTSCHRIFT_PRODUCTS)} gp
-      JOIN ${table(T_GUTSCHRIFT)} g ON gp.gutschrift_id = g.gutschrift_id
-      JOIN ${table(T_INVOICE)} inv2 ON g.invoice_id = inv2.invoice_id
-      GROUP BY gp.products_id, inv2.orders_id
-    ) gut_pid ON ip.products_id = gut_pid.products_id AND inv.orders_id = gut_pid.orders_id
     LEFT JOIN (
       SELECT products_id, ANY_VALUE(products_image) AS products_image
       FROM ${table(T_PRODUCTS)} GROUP BY products_id
@@ -177,8 +148,54 @@ async function fetchItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]
     WHERE inv.orders_id IN (${placeholders})
       AND ip.products_model IS NOT NULL AND ip.products_model != ''
   `
-  const [rows] = await bq.query({ query: sql, params: itemParams })
-  return rows as BQItemRow[]
+  const [rows] = await bq.query({ query: itemSql, params: itemParams })
+  const items = rows as BQItemRow[]
+
+  // Step 2: resilient Retoure/Gutschrift lookup by products_id + orders_id
+  const retourenByKey: Record<string, string> = {}
+  const gutschriftByKey: Record<string, string> = {}
+  try {
+    const [retRows] = await bq.query({
+      query: `
+        SELECT rp.products_id, inv2.orders_id, ANY_VALUE(r.retouren_nr) AS retouren_nr
+        FROM ${table(T_RETOUREN_PRODUCTS)} rp
+        JOIN ${table(T_RETOUREN)} r ON rp.retouren_id = r.retouren_id
+        JOIN ${table(T_INVOICE)} inv2 ON r.invoice_id = inv2.invoice_id
+        WHERE inv2.orders_id IN (${placeholders})
+        GROUP BY rp.products_id, inv2.orders_id
+      `,
+      params: itemParams,
+    })
+    for (const row of retRows as { products_id: string; orders_id: string; retouren_nr: string }[]) {
+      retourenByKey[`${row.orders_id}:${row.products_id}`] = row.retouren_nr
+    }
+
+    const [gutRows] = await bq.query({
+      query: `
+        SELECT gp.products_id, inv2.orders_id, ANY_VALUE(g.gutschrift_nr) AS gutschrift_nr
+        FROM ${table(T_GUTSCHRIFT_PRODUCTS)} gp
+        JOIN ${table(T_GUTSCHRIFT)} g ON gp.gutschrift_id = g.gutschrift_id
+        JOIN ${table(T_INVOICE)} inv2 ON g.invoice_id = inv2.invoice_id
+        WHERE inv2.orders_id IN (${placeholders})
+        GROUP BY gp.products_id, inv2.orders_id
+      `,
+      params: itemParams,
+    })
+    for (const row of gutRows as { products_id: string; orders_id: string; gutschrift_nr: string }[]) {
+      gutschriftByKey[`${row.orders_id}:${row.products_id}`] = row.gutschrift_nr
+    }
+  } catch (e) {
+    console.error('Retoure/Gutschrift lookup failed (non-fatal):', e)
+  }
+
+  // Step 3: merge into items
+  for (const item of items as (BQItemRow & { orders_id: string | number })[]) {
+    const key = `${item.orders_id}:${item.products_id}`
+    item.retouren_nr = retourenByKey[key] ?? null
+    item.gutschrift_nr = gutschriftByKey[key] ?? null
+  }
+
+  return items
 }
 
 export async function searchOrders(query: string): Promise<Order[]> {
