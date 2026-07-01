@@ -1,10 +1,18 @@
 import { SignJWT, jwtVerify } from 'jose'
 
-function getJwtSecret(): string {
+let _secret: Uint8Array | null = null
+let _secretWarningShown = false
+
+function initSecret(): Uint8Array {
+  if (_secret) return _secret
+
   const envSecret = process.env.JWT_SECRET
 
-  if (process.env.NODE_ENV === 'production') {
-    if (!envSecret) {
+  let secretValue: string
+  if (envSecret) {
+    secretValue = envSecret
+  } else {
+    if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') {
       throw new Error(
         'FATAL: JWT_SECRET environment variable is not set.\n' +
         'This is required for production. Set a 32+ character random string:\n' +
@@ -14,25 +22,25 @@ function getJwtSecret(): string {
         'See README.md for more details.'
       )
     }
-    return envSecret
+
+    if (!_secretWarningShown && !process.env.SUPPRESS_DEV_SECRET_WARNING) {
+      console.warn(
+        '⚠️  JWT_SECRET not set. Using static dev secret.\n' +
+        '   This is OK for development only.\n' +
+        '   For production, ALWAYS set JWT_SECRET env var to a secure random value.'
+      )
+      _secretWarningShown = true
+    }
+    secretValue = 'dev-only-insecure-key-change-for-production-32char'
   }
 
-  if (envSecret) {
-    return envSecret
-  }
-
-  if (!process.env.SUPPRESS_DEV_SECRET_WARNING) {
-    console.warn(
-      '⚠️  JWT_SECRET not set. Using static dev secret.\n' +
-      '   This is OK for development only.\n' +
-      '   For production, ALWAYS set JWT_SECRET env var to a secure random value.'
-    )
-  }
-  return 'dev-only-insecure-key-change-for-production-32char'
+  _secret = new TextEncoder().encode(secretValue)
+  return _secret
 }
 
-const JWT_SECRET = getJwtSecret()
-const secret = new TextEncoder().encode(JWT_SECRET)
+function getSecret(): Uint8Array {
+  return initSecret()
+}
 
 export const SESSION_TOKEN_COOKIE = 'retouren_session'
 export const SESSION_EXPIRY = '24h'
@@ -57,7 +65,7 @@ export async function createSessionToken(operatorName: string): Promise<string> 
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setExpirationTime(SESSION_EXPIRY)
-    .sign(secret)
+    .sign(getSecret())
 
   return token
 }
@@ -70,7 +78,7 @@ export async function verifySessionToken(token: string): Promise<string | null> 
   if (!token) return null
 
   try {
-    const verified = await jwtVerify(token, secret)
+    const verified = await jwtVerify(token, getSecret())
     const payload = verified.payload as unknown as SessionPayload
 
     if (!payload.operator) return null
