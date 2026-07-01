@@ -174,12 +174,16 @@ export async function POST(request: Request) {
   }
 
   // Fotos als Anhänge hochladen
+  const photoErrors: string[] = []
   if (taskGid && body.photos && body.photos.length > 0) {
     for (let i = 0; i < body.photos.length; i++) {
       const photo = body.photos[i]
       try {
         const matches = photo.dataUrl.match(/^data:([^;]+);base64,(.+)$/)
-        if (!matches) continue
+        if (!matches) {
+          photoErrors.push(`Foto ${i + 1}: Ungültiges Datenformat`)
+          continue
+        }
         const mimeType = matches[1]
         const base64Data = matches[2]
         const buffer = Buffer.from(base64Data, 'base64')
@@ -187,9 +191,7 @@ export async function POST(request: Request) {
         // Check file size limit (10MB)
         if (buffer.length > MAX_PHOTO_SIZE) {
           const sizeMB = (buffer.length / 1024 / 1024).toFixed(2)
-          console.warn(
-            `Photo ${i + 1} exceeds size limit: ${sizeMB}MB > 10MB, skipping`,
-          )
+          photoErrors.push(`Foto ${i + 1}: ${sizeMB}MB > 10MB Limit`)
           continue
         }
 
@@ -203,12 +205,21 @@ export async function POST(request: Request) {
           body: formData,
         })
         if (!attachRes.ok) {
-          console.error(`Foto-Upload fehlgeschlagen:`, await attachRes.text())
+          const err = await attachRes.text()
+          console.error(`Foto-Upload ${i + 1} fehlgeschlagen (${attachRes.status}):`, err)
+          photoErrors.push(`Foto ${i + 1}: Asana API Fehler ${attachRes.status}`)
+        } else {
+          console.log(`Foto ${i + 1} erfolgreich hochgeladen`)
         }
       } catch (err) {
         console.error(`Fehler beim Upload von Foto ${i + 1}:`, err)
+        photoErrors.push(`Foto ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
+  }
+
+  if (photoErrors.length > 0) {
+    console.warn('Photo upload errors:', photoErrors)
   }
 
   return apiJson(successResponse({ mode: 'live', taskId: taskGid }))
