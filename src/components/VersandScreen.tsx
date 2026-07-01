@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { getOperator, refreshActivity } from '@/lib/operator'
 import { addToVersandHistory } from '@/lib/versandHistory'
+import { apiPost } from '@/lib/api-client'
 
 type Photo = { id: string; dataUrl: string; name: string; type: string }
 
@@ -48,21 +49,14 @@ export default function VersandScreen() {
     setSubmitting(true)
     setError(null)
     try {
-      const res = await fetch('/api/versand', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          carrier,
-          trackingNumber: trackingNumber.trim(),
-          deliveryNote: deliveryNote.trim(),
-          insuranceValue: insuranceValue.trim(),
-          notes: notes.trim(),
-          photos,
-          operatorName: getOperator() ?? 'Unbekannt',
-        }),
+      const data = await apiPost<{ success: boolean; mode: string; taskId: string }>('/api/versand', {
+        carrier,
+        trackingNumber: trackingNumber.trim(),
+        deliveryNote: deliveryNote.trim(),
+        insuranceValue: insuranceValue.trim(),
+        notes: notes.trim(),
+        photos,
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Unbekannter Fehler')
       addToVersandHistory({
         carrier,
         trackingNumber: trackingNumber.trim(),
@@ -74,7 +68,7 @@ export default function VersandScreen() {
         taskId: data.taskId,
       })
       setTaskId(data.taskId)
-      setMode(data.mode)
+      setMode((data.mode as 'live' | 'demo') || 'demo')
       setSubmitted(true)
     } catch (e) {
       setError(String(e))
