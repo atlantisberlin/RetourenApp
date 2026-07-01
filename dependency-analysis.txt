@@ -1,0 +1,28 @@
+========================================
+DEPENDENCY ANALYSIS REPORT
+Date: Wed Jul  1 08:18:07 UTC 2026
+========================================
+
+=== 1. UNGENUTZTE DATEIEN (in src/ aber nicht importiert) ===
+
+  ✓ app/api/debug/route.ts (Entry Point - OK)
+  ✓ app/api/order/[id]/route.ts (Entry Point - OK)
+  ✓ app/api/search-products/route.ts (Entry Point - OK)
+  ✓ app/api/search/route.ts (Entry Point - OK)
+  ✓ app/api/submit/route.ts (Entry Point - OK)
+  ✓ app/api/versand/route.ts (Entry Point - OK)
+  ✓ app/globals.css (Entry Point - OK)
+  ✓ app/layout.tsx (Entry Point - OK)
+  ✓ app/order/[id]/erfassen/page.tsx (Entry Point - OK)
+  ✓ app/order/[id]/fotos/page.tsx (Entry Point - OK)
+  ✓ app/order/[id]/page.tsx (Entry Point - OK)
+  ✓ app/order/[id]/zusammenfassung/page.tsx (Entry Point - OK)
+  ✓ app/page.tsx (Entry Point - OK)
+  ✓ app/retouren/page.tsx (Entry Point - OK)
+  ✓ app/statistik/page.tsx (Entry Point - OK)
+  ✓ app/versand/page.tsx (Entry Point - OK)
+  ✓ components/ErfassenScreen.tsx (Entry Point - OK)
+  ✓ components/FotosScreen.tsx (Entry Point - OK)
+  ✓ components/HomeScreen.tsx (Entry Point - OK)
+  ✓ components/OrderDetailScreen.tsx (Entry Point - OK)
+  ⚠ components/RetourenWizard.tsx (nicht importiert!)
