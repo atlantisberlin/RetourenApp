@@ -1,36 +1,30 @@
 import { verifySessionToken, extractSessionToken } from '@/lib/session'
 import { apiJson, successResponse, errorResponse } from '@/lib/api-response'
+import { VersandSchema } from '@/lib/schemas'
+import { z } from 'zod'
 
 type Photo = { id: string; dataUrl: string; name: string; type: string }
-
-type VersandBody = {
-  carrier: string
-  trackingNumber: string
-  deliveryNote: string
-  insuranceValue: string
-  notes: string
-  photos: Photo[]
-}
 
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024 // 10MB
 
 export async function POST(request: Request) {
-  // Verify session token
-  const token = extractSessionToken(
-    request.headers.get('authorization') ?? undefined,
-    request.headers.get('cookie') ?? undefined
-  )
+  try {
+    const token = extractSessionToken(
+      request.headers.get('authorization') ?? undefined,
+      request.headers.get('cookie') ?? undefined
+    )
 
-  if (!token) {
-    return apiJson(errorResponse('Unauthorized: No session token'), 401)
-  }
+    if (!token) {
+      return apiJson(errorResponse('Unauthorized: No session token'), 401)
+    }
 
-  const operatorName = await verifySessionToken(token)
-  if (!operatorName) {
-    return apiJson(errorResponse('Unauthorized: Invalid or expired session'), 401)
-  }
+    const operatorName = await verifySessionToken(token)
+    if (!operatorName) {
+      return apiJson(errorResponse('Unauthorized: Invalid or expired session'), 401)
+    }
 
-  const body: VersandBody = await request.json()
+    const rawBody = await request.json()
+    const body = VersandSchema.parse(rawBody)
 
   const asanaToken = process.env.ASANA_TOKEN
   const asanaProject = process.env.ASANA_VERSAND_PROJECT_GID
@@ -125,5 +119,15 @@ export async function POST(request: Request) {
     }
   }
 
-  return apiJson(successResponse({ mode: 'live', taskId: taskGid }))
+    return apiJson(successResponse({ mode: 'live', taskId: taskGid }))
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return apiJson(
+        errorResponse(`Invalid input: ${error.errors[0].message}`),
+        400
+      )
+    }
+    console.error('Versand error:', error)
+    return apiJson(errorResponse('Submission failed'), 500)
+  }
 }

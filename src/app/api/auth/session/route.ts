@@ -1,32 +1,30 @@
 import { createSessionToken } from '@/lib/session'
 import { apiJson, successResponse, errorResponse } from '@/lib/api-response'
+import { SessionCreateSchema } from '@/lib/schemas'
+import { z } from 'zod'
 
-/**
- * POST /api/auth/session
- * Create a new session token for an operator
- *
- * Request body: { operatorName: string }
- * Response: { success: true, data: { token: string, expiresIn: string, operatorName: string } }
- */
 export async function POST(request: Request) {
   try {
-    const { operatorName } = (await request.json()) as { operatorName?: string }
+    const body = await request.json()
+    const validated = SessionCreateSchema.parse(body)
 
-    if (!operatorName?.trim()) {
-      return apiJson(errorResponse('Operator name is required'), 400)
-    }
-
-    const token = await createSessionToken(operatorName)
+    const token = await createSessionToken(validated.operatorName)
 
     return apiJson(
       successResponse({
         token,
         expiresIn: '24h',
-        operatorName: operatorName.trim(),
+        operatorName: validated.operatorName,
       }),
       200
     )
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return apiJson(
+        errorResponse(`Invalid input: ${error.errors[0].message}`),
+        400
+      )
+    }
     console.error('Session creation error:', error)
     return apiJson(errorResponse('Failed to create session'), 500)
   }

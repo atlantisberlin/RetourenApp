@@ -1,6 +1,8 @@
 import type { ReturnCapture } from '@/lib/types'
 import { verifySessionToken, extractSessionToken } from '@/lib/session'
 import { apiJson, successResponse, errorResponse } from '@/lib/api-response'
+import { ReturnCaptureSchema } from '@/lib/schemas'
+import { z } from 'zod'
 
 const conditionLabel: Record<string, string> = {
   gut: 'Gut',
@@ -31,24 +33,23 @@ function escapeHtml(str: string): string {
 }
 
 export async function POST(request: Request) {
-  // ──────────────────────────────────────────────────────────────
-  // 1. VERIFY SESSION TOKEN (NEW: JWT-based security)
-  // ──────────────────────────────────────────────────────────────
-  const token = extractSessionToken(
-    request.headers.get('authorization') ?? undefined,
-    request.headers.get('cookie') ?? undefined
-  )
+  try {
+    const token = extractSessionToken(
+      request.headers.get('authorization') ?? undefined,
+      request.headers.get('cookie') ?? undefined
+    )
 
-  if (!token) {
-    return apiJson(errorResponse('Unauthorized: No session token'), 401)
-  }
+    if (!token) {
+      return apiJson(errorResponse('Unauthorized: No session token'), 401)
+    }
 
-  const operatorName = await verifySessionToken(token)
-  if (!operatorName) {
-    return apiJson(errorResponse('Unauthorized: Invalid or expired session'), 401)
-  }
+    const operatorName = await verifySessionToken(token)
+    if (!operatorName) {
+      return apiJson(errorResponse('Unauthorized: Invalid or expired session'), 401)
+    }
 
-  const body: ReturnCapture = await request.json()
+    const rawBody = await request.json()
+    const body = ReturnCaptureSchema.parse(rawBody) as ReturnCapture
 
   const asanaToken = process.env.ASANA_TOKEN
   const asanaProject = process.env.ASANA_PROJECT_GID
@@ -231,9 +232,19 @@ export async function POST(request: Request) {
     }
   }
 
-  if (photoErrors.length > 0) {
-    console.warn('Photo upload errors:', photoErrors)
-  }
+    if (photoErrors.length > 0) {
+      console.warn('Photo upload errors:', photoErrors)
+    }
 
-  return apiJson(successResponse({ mode: 'live', taskId: taskGid }))
+    return apiJson(successResponse({ mode: 'live', taskId: taskGid }))
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return apiJson(
+        errorResponse(`Invalid input: ${error.errors[0].message}`),
+        400
+      )
+    }
+    console.error('Submit error:', error)
+    return apiJson(errorResponse('Submission failed'), 500)
+  }
 }
