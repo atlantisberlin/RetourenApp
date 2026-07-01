@@ -1,6 +1,39 @@
 import { SignJWT, jwtVerify } from 'jose'
+import { randomBytes } from 'crypto'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-change-in-production'
+function getJwtSecret(): string {
+  const envSecret = process.env.JWT_SECRET
+
+  if (process.env.NODE_ENV === 'production') {
+    if (!envSecret) {
+      throw new Error(
+        'FATAL: JWT_SECRET environment variable is not set.\n' +
+        'This is required for production. Set a 32+ character random string:\n' +
+        '  export JWT_SECRET=$(openssl rand -hex 32)\n' +
+        'Or generate via:\n' +
+        '  node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"\n' +
+        'See README.md for more details.'
+      )
+    }
+    return envSecret
+  }
+
+  if (envSecret) {
+    return envSecret
+  }
+
+  const devSecret = randomBytes(32).toString('hex')
+  if (!process.env.SUPPRESS_DEV_SECRET_WARNING) {
+    console.warn(
+      '⚠️  JWT_SECRET not set. Using generated dev secret.\n' +
+      '   This is OK for development only.\n' +
+      '   For production, set JWT_SECRET env var.'
+    )
+  }
+  return devSecret
+}
+
+const JWT_SECRET = getJwtSecret()
 const secret = new TextEncoder().encode(JWT_SECRET)
 
 export const SESSION_TOKEN_COOKIE = 'retouren_session'
