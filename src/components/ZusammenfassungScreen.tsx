@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { ReturnCapture } from '@/lib/types'
 import { apiPost } from '@/lib/api-client'
+import type { ApiResponse } from '@/lib/api-response'
 import { StepIndicator } from './FotosScreen'
 import { addToHistory } from '@/lib/history'
 
@@ -24,9 +25,19 @@ const REASON_LABELS: Record<string, string> = {
   sonstiges: 'Sonstiges',
 }
 
+function initializeCapture(): ReturnCapture | null {
+  try {
+    const raw = localStorage.getItem('return_capture')
+    if (raw) {
+      return JSON.parse(raw)
+    }
+  } catch {}
+  return null
+}
+
 export default function ZusammenfassungScreen({ orderId }: { orderId: string }) {
   const router = useRouter()
-  const [capture, setCapture] = useState<ReturnCapture | null>(null)
+  const [capture] = useState(() => initializeCapture())
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [taskId, setTaskId] = useState<string | null>(null)
@@ -34,17 +45,10 @@ export default function ZusammenfassungScreen({ orderId }: { orderId: string }) 
   const [mode, setMode] = useState<'live' | 'demo'>('demo')
 
   useEffect(() => {
-    const raw = localStorage.getItem('return_capture')
-    if (raw) {
-      try {
-        setCapture(JSON.parse(raw))
-      } catch {
-        router.push(`/order/${orderId}`)
-      }
-    } else {
+    if (!capture) {
       router.push(`/order/${orderId}`)
     }
-  }, [orderId, router])
+  }, [capture, orderId, router])
 
   async function handleSubmit() {
     if (!capture) return
@@ -52,7 +56,7 @@ export default function ZusammenfassungScreen({ orderId }: { orderId: string }) 
     setError(null)
     try {
       const response = await apiPost<{ mode: string; taskId: string }>('/api/submit', capture)
-      const resp = response as any
+      const resp = response as ApiResponse<{ mode: string; taskId: string }>
       if (!resp.success) {
         throw new Error(resp.error || 'Submission failed')
       }

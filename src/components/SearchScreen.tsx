@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useCallback, useEffect } from 'react'
+import { useState, useTransition, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Order, SearchResult } from '@/lib/types'
 import { getOperator, clearOperator, refreshActivity } from '@/lib/operator'
@@ -9,29 +9,27 @@ import { getHistory } from '@/lib/history'
 
 const HINTS = ['Bestellnr.', 'Kundennr.', 'Rechnungsnr.', 'Name']
 
+function initializeDraft() {
+  try {
+    const raw = localStorage.getItem('return_capture')
+    if (raw) {
+      const c = JSON.parse(raw)
+      if (c.orderId && c.order) return { orderId: c.orderId, orderNumber: c.order.orderNumber, customerName: c.order.customerName }
+    }
+  } catch {}
+  return null
+}
+
 export default function SearchScreen() {
   const router = useRouter()
-  const [operator, setOperatorState] = useState<string | null>(null)
-  const [operatorChecked, setOperatorChecked] = useState(false)
+  const [operator, setOperatorState] = useState(() => getOperator())
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Order[]>([])
   const [mode, setMode] = useState<'live' | 'demo' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [hasSearched, setHasSearched] = useState(false)
-  const [draft, setDraft] = useState<{ orderId: string; orderNumber: string; customerName: string } | null>(null)
-
-  useEffect(() => {
-    setOperatorState(getOperator())
-    setOperatorChecked(true)
-    try {
-      const raw = localStorage.getItem('return_capture')
-      if (raw) {
-        const c = JSON.parse(raw)
-        if (c.orderId && c.order) setDraft({ orderId: c.orderId, orderNumber: c.order.orderNumber, customerName: c.order.customerName })
-      }
-    } catch {}
-  }, [])
+  const [draft] = useState(() => initializeDraft())
 
   const search = useCallback(
     (q: string) => {
@@ -74,7 +72,6 @@ export default function SearchScreen() {
     }
   }
 
-  if (!operatorChecked) return null
   if (!operator) {
     return <UserSelectionScreen onSelect={(name) => setOperatorState(name)} />
   }
@@ -128,7 +125,7 @@ export default function SearchScreen() {
               <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{draft.customerName} · #{draft.orderNumber}</div>
             </div>
             <button className="btn btn-secondary" style={{ fontSize: 13, padding: '8px 12px', flexShrink: 0 }} onClick={() => { refreshActivity(); router.push(`/order/${draft.orderId}/fotos`) }}>Weiter →</button>
-            <button onClick={() => { localStorage.removeItem('return_capture'); setDraft(null) }} style={{ all: 'unset', cursor: 'pointer', fontSize: 22, color: 'var(--text-muted)', lineHeight: 1, padding: '0 4px', flexShrink: 0 }}>×</button>
+            <button onClick={() => { localStorage.removeItem('return_capture'); window.location.reload() }} style={{ all: 'unset', cursor: 'pointer', fontSize: 22, color: 'var(--text-muted)', lineHeight: 1, padding: '0 4px', flexShrink: 0 }}>×</button>
           </div>
         )}
         <div style={{ marginBottom: 28 }}>
@@ -205,7 +202,7 @@ export default function SearchScreen() {
         {hasSearched && results.length === 0 && !isPending && (
           <div className="empty-state">
             <EmptyIcon />
-            <p>Keine Bestellung gefunden für „{query}".</p>
+            <p>Keine Bestellung gefunden für &ldquo;{query}&rdquo;.</p>
           </div>
         )}
 

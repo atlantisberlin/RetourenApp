@@ -26,7 +26,7 @@ function getClient(): BigQuery | null {
       return new BigQuery({ projectId: PROJECT, location: 'europe-west3' })
     }
     return null
-  } catch (e) {
+  } catch {
     return null
   }
 }

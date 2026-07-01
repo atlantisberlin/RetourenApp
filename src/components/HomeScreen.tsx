@@ -1,38 +1,35 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getOperator, clearOperator } from '@/lib/operator'
 import UserSelectionScreen from './UserSelectionScreen'
 
 type RetourenDraft = { step: number; trackingNumber: string; customerName?: string; orderNumber?: string }
 
-export default function HomeScreen() {
-  const router = useRouter()
-  const [operator, setOperator] = useState<string | null>(null)
-  const [checked, setChecked] = useState(false)
-  const [retourenDraft, setRetourenDraft] = useState<RetourenDraft | null>(null)
-
-  useEffect(() => {
-    setOperator(getOperator())
-    setChecked(true)
-    try {
-      const raw = localStorage.getItem('retouren_draft')
-      if (raw) {
-        const d = JSON.parse(raw)
-        if (d.step > 1 || d.trackingNumber) {
-          setRetourenDraft({
-            step: d.step ?? 1,
-            trackingNumber: d.trackingNumber ?? '',
-            customerName: d.selectedOrder?.customerName,
-            orderNumber: d.selectedOrder?.orderNumber,
-          })
+function initializeDraft(): RetourenDraft | null {
+  try {
+    const raw = localStorage.getItem('retouren_draft')
+    if (raw) {
+      const d = JSON.parse(raw)
+      if (d.step > 1 || d.trackingNumber) {
+        return {
+          step: d.step ?? 1,
+          trackingNumber: d.trackingNumber ?? '',
+          customerName: d.selectedOrder?.customerName,
+          orderNumber: d.selectedOrder?.orderNumber,
         }
       }
-    } catch { /* ignore */ }
-  }, [])
+    }
+  } catch { /* ignore */ }
+  return null
+}
 
-  if (!checked) return null
+export default function HomeScreen() {
+  const router = useRouter()
+  const [operator, setOperator] = useState(() => getOperator())
+  const [retourenDraft] = useState(() => initializeDraft())
+
   if (!operator) return <UserSelectionScreen onSelect={(name) => setOperator(name)} />
 
   return (
@@ -102,7 +99,7 @@ export default function HomeScreen() {
                 Weiter →
               </button>
               <button
-                onClick={() => { localStorage.removeItem('retouren_draft'); setRetourenDraft(null) }}
+                onClick={() => { localStorage.removeItem('retouren_draft'); window.location.reload() }}
                 style={{ all: 'unset', cursor: 'pointer', fontSize: 22, color: 'var(--text-muted)', lineHeight: 1, padding: '0 4px', flexShrink: 0 }}
               >
                 ×

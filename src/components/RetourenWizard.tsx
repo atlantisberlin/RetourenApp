@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation'
 import { getOperator, refreshActivity } from '@/lib/operator'
 import { addToHistory } from '@/lib/history'
 import { apiPost } from '@/lib/api-client'
+import type { ApiResponse } from '@/lib/api-response'
 import type { Order, OrderItem, ReturnCapture, ReturnCondition, ReturnReason, ReturnResolution, ReplacementProduct } from '@/lib/types'
 import UserSelectionScreen from '@/components/UserSelectionScreen'
 import { ArticleRow, type ArticleCapture } from '@/components/retouren-wizard/ArticleRow'
-import { DivingIcon, CameraIcon, SearchSpinner, ButtonSpinner, AsanaIcon } from '@/components/retouren-wizard/icons'
+import { CameraIcon, SearchSpinner, ButtonSpinner, AsanaIcon } from '@/components/retouren-wizard/icons'
 
 type Photo = { id: string; dataUrl: string; name: string; type: string }
 
@@ -69,6 +70,7 @@ export default function RetourenWizard() {
 
   // Load draft + operator on mount
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOperator(getOperator())
     setOperatorChecked(true)
     try {
@@ -91,6 +93,7 @@ export default function RetourenWizard() {
 
   // Rebuild articles when order is selected; merge saved status if restoring draft
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!selectedOrder) { setArticles([]); return }
     const rebuilt = selectedOrder.items.map((item: OrderItem) => ({
       itemId: item.id,
@@ -128,7 +131,8 @@ export default function RetourenWizard() {
         trackingNumber,
         isDhlReturn,
         selectedOrder,
-        articles: articles.map(({ photo: _p, ...rest }) => rest),
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        articles: articles.map(({ photo, ...rest }) => rest),
         notes,
         savedAt: new Date().toISOString(),
       }))
@@ -229,7 +233,7 @@ export default function RetourenWizard() {
         photos: [labelPhoto, exteriorPhoto, slipPhoto, ...articles.map(a => a.photo)].filter((p): p is Photo => p !== null),
       }
       const response = await apiPost<{ mode: string; taskId: string }>('/api/submit', body)
-      const resp = response as any
+      const resp = response as ApiResponse<{ mode: string; taskId: string }>
       if (!resp.success) {
         throw new Error(resp.error || 'Submission failed')
       }
@@ -499,7 +503,7 @@ export default function RetourenWizard() {
                 )}
                 {!searching && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: 14 }}>
-                    Keine Bestellungen gefunden für „{searchQuery}"
+                    Keine Bestellungen gefunden für &ldquo;{searchQuery}&rdquo;
                   </div>
                 )}
                 {searchResults.length > 0 && (

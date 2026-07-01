@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { getOperator, refreshActivity } from '@/lib/operator'
 import { addToVersandHistory } from '@/lib/versandHistory'
 import { apiPost } from '@/lib/api-client'
+import type { ApiResponse } from '@/lib/api-response'
 
 type Photo = { id: string; dataUrl: string; name: string; type: string }
 
@@ -57,7 +58,7 @@ export default function VersandScreen() {
         notes: notes.trim(),
         photos,
       })
-      const resp = response as any
+      const resp = response as ApiResponse<{ mode: string; taskId: string }>
       if (!resp.success) {
         throw new Error(resp.error || 'Submission failed')
       }
