@@ -110,7 +110,31 @@ export async function POST(request: Request) {
 
   const html_notes = `<body><h2>Auftrag</h2><ul>${metaRows}</ul><h2>Zurückgekommene Positionen</h2><ul>${itemHtml}</ul>${bemerkungHtml}</body>`
 
-  console.log('[Asana] html_notes:', html_notes)
+  console.log('[Asana] Task name:', title)
+  console.log('[Asana] Photos count:', body.photos?.length ?? 0)
+  console.log('[Asana] html_notes length:', html_notes.length)
+  console.log('[Asana] Tags:', [
+    ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
+    ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
+    ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
+    ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
+    ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
+  ])
+
+  const taskPayload = {
+    data: {
+      name: title,
+      html_notes,
+      projects: [asanaProject],
+      tags: [
+        ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
+        ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
+        ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
+        ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
+        ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
+      ],
+    },
+  }
 
   const res = await fetch('https://app.asana.com/api/1.0/tasks', {
     method: 'POST',
@@ -118,25 +142,14 @@ export async function POST(request: Request) {
       Authorization: `Bearer ${asanaToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      data: {
-        name: title,
-        html_notes,
-        projects: [asanaProject],
-        tags: [
-          ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
-          ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
-          ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
-          ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
-          ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
-        ],
-      },
-    }),
+    body: JSON.stringify(taskPayload),
   })
 
   if (!res.ok) {
     const err = await res.text()
-    console.error('Asana API error:', res.status, err)
+    console.error('Asana API error:', res.status)
+    console.error('Asana error body:', err)
+    console.error('Task payload size:', JSON.stringify(taskPayload).length, 'bytes')
     return apiJson(errorResponse('Asana submission failed'), 502)
   }
 
