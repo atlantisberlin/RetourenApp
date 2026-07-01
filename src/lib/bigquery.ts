@@ -158,7 +158,6 @@ async function fetchItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]
       FROM ${table(T_PRODUCTS)} GROUP BY products_id
     ) p ON ip.products_id = p.products_id
     WHERE inv.orders_id IN (${placeholders})
-      AND ip.products_model IS NOT NULL AND ip.products_model != ''
   `
   const [rows] = await bq.query({ query: itemSql, params: itemParams })
   const items = rows as BQItemRow[]
