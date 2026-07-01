@@ -4,8 +4,8 @@
  */
 
 const SESSION_TOKEN_KEY = 'retouren_session_token'
-const OPERATOR_NAME_KEY = 'operator_session_name'
-const OPERATOR_TS_KEY = 'operator_session_ts'
+const OPERATOR_NAME_KEY = 'operator_name'
+const OPERATOR_TS_KEY = 'operator_ts'
 
 export async function createSession(operatorName: string): Promise<string> {
   try {
