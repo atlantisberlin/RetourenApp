@@ -1,7 +1,24 @@
 import { isBigQueryConfigured, searchOrders } from '@/lib/bigquery'
 import { searchDemoOrders } from '@/lib/demo-data'
+import { verifySessionToken, extractSessionToken } from '@/lib/session'
+import { apiJson, errorResponse } from '@/lib/api-response'
 
 export async function GET(request: Request) {
+  // ✅ AUTHENTIFIZIERUNG HINZUGEFÜGT
+  const token = extractSessionToken(
+    request.headers.get('authorization') ?? undefined,
+    request.headers.get('cookie') ?? undefined
+  )
+
+  if (!token) {
+    return apiJson(errorResponse('Unauthorized: No session token'), 401)
+  }
+
+  const operatorName = await verifySessionToken(token)
+  if (!operatorName) {
+    return apiJson(errorResponse('Unauthorized: Invalid or expired session'), 401)
+  }
+
   const { searchParams } = new URL(request.url)
   const q = searchParams.get('q') ?? ''
 
@@ -15,10 +32,7 @@ export async function GET(request: Request) {
       return Response.json({ orders, query: q, mode: 'live' })
     } catch (err) {
       console.error('BigQuery search failed:', err)
-      return Response.json(
-        { error: 'BigQuery-Abfrage fehlgeschlagen', detail: String(err) },
-        { status: 500 }
-      )
+      return apiJson(errorResponse('Search failed'), 500)
     }
   }
 
