@@ -1,4 +1,4 @@
-import { createSessionToken, getSessionCookieHeader } from '@/lib/session'
+import { createSessionToken } from '@/lib/session'
 import { apiJson, successResponse, errorResponse } from '@/lib/api-response'
 
 /**

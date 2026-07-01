@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import type { Order } from '@/lib/types'
-import { getCustomerHistory, type HistoryEntry } from '@/lib/history'
+import { getCustomerHistory } from '@/lib/history'
 
 const STATUS_LABELS: Record<string, string> = {
   '1': 'Ausstehend',
@@ -20,12 +20,8 @@ export default function OrderDetailScreen({
   order: Order
   mode: 'live' | 'demo'
 }) {
-  const [customerHistory, setCustomerHistory] = useState<HistoryEntry[]>([])
+  const [customerHistory] = useState(() => getCustomerHistory(order.customerNumber))
   const [historyOpen, setHistoryOpen] = useState(false)
-
-  useEffect(() => {
-    setCustomerHistory(getCustomerHistory(order.customerNumber))
-  }, [order.customerNumber])
 
   return (
     <>

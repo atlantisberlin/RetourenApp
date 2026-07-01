@@ -44,7 +44,7 @@ export async function verifySessionToken(token: string): Promise<string | null> 
 
     if (!payload.operator) return null
     return payload.operator
-  } catch (error) {
+  } catch {
     // Token is invalid or expired
     return null
   }

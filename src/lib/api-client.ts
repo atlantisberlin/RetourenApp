@@ -22,9 +22,9 @@ export async function apiCall<T>(
   })
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
+    const errorData = await response.json().catch(() => ({})) as Record<string, unknown>
     throw new Error(
-      (errorData as any).error || `API error: ${response.status} ${response.statusText}`
+      (typeof errorData.error === 'string' ? errorData.error : null) || `API error: ${response.status} ${response.statusText}`
     )
   }
 

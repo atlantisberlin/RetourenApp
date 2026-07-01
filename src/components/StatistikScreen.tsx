@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getHistory, deleteFromHistory, type HistoryEntry } from '@/lib/history'
-import { getVersandHistory, deleteFromVersandHistory, type VersandEntry } from '@/lib/versandHistory'
+import { getHistory, deleteFromHistory } from '@/lib/history'
+import { getVersandHistory, deleteFromVersandHistory } from '@/lib/versandHistory'
 import { getOperator } from '@/lib/operator'
 
 const REASON_LABELS: Record<string, string> = {
@@ -117,9 +117,7 @@ function getOperatorStats(entries: { operatorName: string; submittedAt: string }
 }
 
 function RetourenTab({ isErik }: { isErik: boolean }) {
-  const [history, setHistory] = useState<HistoryEntry[]>([])
-
-  useEffect(() => { setHistory(getHistory()) }, [])
+  const [history, setHistory] = useState(() => getHistory())
 
   function handleDelete(id: string) { deleteFromHistory(id); setHistory(getHistory()) }
 
@@ -214,9 +212,7 @@ function RetourenTab({ isErik }: { isErik: boolean }) {
 }
 
 function VersandTab({ isErik }: { isErik: boolean }) {
-  const [history, setHistory] = useState<VersandEntry[]>([])
-
-  useEffect(() => { setHistory(getVersandHistory()) }, [])
+  const [history, setHistory] = useState(() => getVersandHistory())
 
   function handleDelete(id: string) { deleteFromVersandHistory(id); setHistory(getVersandHistory()) }
 
@@ -339,9 +335,7 @@ function DeleteButton({ onClick }: { onClick: () => void }) {
 export default function StatistikScreen() {
   const router = useRouter()
   const [tab, setTab] = useState<'retouren' | 'versand'>('retouren')
-  const [isErik, setIsErik] = useState(false)
-
-  useEffect(() => { setIsErik(getOperator() === 'Erik') }, [])
+  const [isErik] = useState(() => getOperator() === 'Erik')
 
   return (
     <>
