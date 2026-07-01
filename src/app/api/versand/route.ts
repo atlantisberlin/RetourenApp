@@ -1,3 +1,5 @@
+import { verifySessionToken, extractSessionToken } from '@/lib/session'
+
 type Photo = { id: string; dataUrl: string; name: string; type: string }
 
 type VersandBody = {
@@ -7,10 +9,32 @@ type VersandBody = {
   insuranceValue: string
   notes: string
   photos: Photo[]
-  operatorName: string
 }
 
+const MAX_PHOTO_SIZE = 10 * 1024 * 1024 // 10MB
+
 export async function POST(request: Request) {
+  // Verify session token
+  const token = extractSessionToken(
+    request.headers.get('authorization') ?? undefined,
+    request.headers.get('cookie') ?? undefined
+  )
+
+  if (!token) {
+    return Response.json(
+      { error: 'Unauthorized: No session token', status: 401 },
+      { status: 401 }
+    )
+  }
+
+  const operatorName = await verifySessionToken(token)
+  if (!operatorName) {
+    return Response.json(
+      { error: 'Unauthorized: Invalid or expired session', status: 401 },
+      { status: 401 }
+    )
+  }
+
   const body: VersandBody = await request.json()
 
   const asanaToken = process.env.ASANA_TOKEN
@@ -32,7 +56,7 @@ export async function POST(request: Request) {
   const title = `Versand – ${carrierPart}${body.trackingNumber} – ${date}`
 
   const descriptionLines = [
-    `Dokumentiert von: ${body.operatorName}`,
+    `Dokumentiert von: ${operatorName}`,
     `Datum: ${date}`,
     '',
     body.carrier ? `Logistikunternehmen: ${body.carrier}` : null,
@@ -77,6 +101,15 @@ export async function POST(request: Request) {
         const mimeType = matches[1]
         const base64Data = matches[2]
         const buffer = Buffer.from(base64Data, 'base64')
+
+        // Check file size limit (10MB)
+        if (buffer.length > MAX_PHOTO_SIZE) {
+          const sizeMB = (buffer.length / 1024 / 1024).toFixed(2)
+          console.warn(
+            `Versand photo ${i + 1} exceeds size limit: ${sizeMB}MB > 10MB, skipping`,
+          )
+          continue
+        }
 
         const formData = new FormData()
         const blob = new Blob([buffer], { type: mimeType })

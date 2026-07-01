@@ -1,4 +1,5 @@
 import type { ReturnCapture } from '@/lib/types'
+import { verifySessionToken, extractSessionToken } from '@/lib/session'
 
 const conditionLabel: Record<string, string> = {
   gut: 'Gut',
@@ -16,6 +17,8 @@ const reasonLabel: Record<string, string> = {
   sonstiges: 'Sonstiges',
 }
 
+const MAX_PHOTO_SIZE = 10 * 1024 * 1024 // 10MB
+
 function escapeHtml(str: string): string {
   return str
     // strip characters invalid in XML 1.0 (control chars except tab/LF/CR)
@@ -27,6 +30,29 @@ function escapeHtml(str: string): string {
 }
 
 export async function POST(request: Request) {
+  // ──────────────────────────────────────────────────────────────
+  // 1. VERIFY SESSION TOKEN (NEW: JWT-based security)
+  // ──────────────────────────────────────────────────────────────
+  const token = extractSessionToken(
+    request.headers.get('authorization') ?? undefined,
+    request.headers.get('cookie') ?? undefined
+  )
+
+  if (!token) {
+    return Response.json(
+      { error: 'Unauthorized: No session token', status: 401 },
+      { status: 401 }
+    )
+  }
+
+  const operatorName = await verifySessionToken(token)
+  if (!operatorName) {
+    return Response.json(
+      { error: 'Unauthorized: Invalid or expired session', status: 401 },
+      { status: 401 }
+    )
+  }
+
   const body: ReturnCapture = await request.json()
 
   const asanaToken = process.env.ASANA_TOKEN
@@ -71,7 +97,7 @@ export async function POST(request: Request) {
   const rechnungsNr = body.order.invoiceNr
 
   const metaRows = [
-    `<li><strong>Bearbeitet von:</strong> ${escapeHtml(body.operatorName)}</li>`,
+    `<li><strong>Bearbeitet von:</strong> ${escapeHtml(operatorName)}</li>`,
     `<li><strong>Bestellnr.:</strong> ${escapeHtml(body.order.orderNumber)}</li>`,
     `<li><strong>Kundennr.:</strong> ${escapeHtml(body.order.customerNumber)}</li>`,
     `<li><strong>Kunde:</strong> ${escapeHtml(body.order.customerName)}</li>`,
@@ -128,7 +154,7 @@ export async function POST(request: Request) {
     const hasUmtausch = returnedItems.some((i) => i.resolution === 'umtausch')
 
     const subtasks: { name: string; completed: boolean }[] = [
-      { name: `Paket angenommen – von: ${body.operatorName}`, completed: true },
+      { name: `Paket angenommen – von: ${operatorName}`, completed: true },
       body.order.activeRetourenNr
         ? { name: `Retoure angelegt (${body.order.activeRetourenNr}) – von: ATLOS-Kunde`, completed: true }
         : { name: 'Retoure angelegt – von: ___', completed: false },
@@ -162,6 +188,15 @@ export async function POST(request: Request) {
         const mimeType = matches[1]
         const base64Data = matches[2]
         const buffer = Buffer.from(base64Data, 'base64')
+
+        // Check file size limit (10MB)
+        if (buffer.length > MAX_PHOTO_SIZE) {
+          const sizeMB = (buffer.length / 1024 / 1024).toFixed(2)
+          console.warn(
+            `Photo ${i + 1} exceeds size limit: ${sizeMB}MB > 10MB, skipping`,
+          )
+          continue
+        }
 
         const formData = new FormData()
         const blob = new Blob([buffer], { type: mimeType })
