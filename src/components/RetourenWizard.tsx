@@ -8,12 +8,12 @@ import { apiPost } from '@/lib/api-client'
 import type { ApiResponse } from '@/lib/api-response'
 import type { Order, OrderItem, ReturnCapture, ReturnCondition, ReturnReason, ReturnResolution, ReplacementProduct } from '@/lib/types'
 import UserSelectionScreen from '@/components/UserSelectionScreen'
-import { ArticleRow, type ArticleCapture } from '@/components/retouren-wizard/ArticleRow'
+import { type ArticleCapture } from '@/components/retouren-wizard/ArticleRow'
 import { Step1SelectPackage } from '@/components/retouren-wizard/Step1SelectPackage'
 import { Step2SearchOrder } from '@/components/retouren-wizard/Step2SearchOrder'
 import { Step3SelectArticles } from '@/components/retouren-wizard/Step3SelectArticles'
 import { Step4Summary } from '@/components/retouren-wizard/Step4Summary'
-import { SearchSpinner, ButtonSpinner, AsanaIcon } from '@/components/retouren-wizard/icons'
+import { ButtonSpinner, AsanaIcon } from '@/components/retouren-wizard/icons'
 
 type Photo = { id: string; dataUrl: string; name: string; type: string }
 
