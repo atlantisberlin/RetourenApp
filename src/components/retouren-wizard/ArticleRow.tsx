@@ -96,7 +96,7 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
       {/* Main row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px' }}>
         {/* Product image */}
-        <div style={{ width: 48, height: 48, borderRadius: 8, flexShrink: 0, background: 'var(--surface-3)', border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <div style={{ position: 'relative', width: 48, height: 48, borderRadius: 8, flexShrink: 0, background: 'var(--surface-3)', border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           {article.imageUrl ? (
             <Image src={article.imageUrl} alt={article.productName} fill style={{ objectFit: 'cover' }} />
           ) : (
@@ -145,7 +145,7 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
             onClick={() => onToggleReturned(false)}
             style={{
               padding: '6px 12px', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              border: `1.5px solid ${ret === false ? 'var(--border)' : 'var(--border)'}`,
+              border: `1.5px solid ${ret === false ? 'var(--surface-3)' : 'var(--border)'}`,
               background: ret === false ? 'var(--surface-3)' : 'var(--surface)',
               color: ret === false ? 'var(--text-2)' : 'var(--text-muted)',
               transition: 'all 0.12s',

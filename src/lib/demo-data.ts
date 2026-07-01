@@ -20,6 +20,7 @@ export const DEMO_ORDERS: Order[] = [
         sku: 'TZ-NEO-5MM-L',
         quantity: 1,
         price: 189.0,
+        imageUrl: 'https://images.unsplash.com/photo-1577720643272-265e434b3f48?w=100&h=100&fit=crop',
       },
       {
         id: 'p2',
@@ -28,6 +29,7 @@ export const DEMO_ORDERS: Order[] = [
         sku: 'FL-PRO-43',
         quantity: 1,
         price: 74.5,
+        imageUrl: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=100&h=100&fit=crop',
       },
       {
         id: 'p3',
@@ -36,6 +38,7 @@ export const DEMO_ORDERS: Order[] = [
         sku: 'UW-LED-1000',
         quantity: 2,
         price: 39.9,
+        imageUrl: 'https://images.unsplash.com/photo-1578500494198-246f612d782f?w=100&h=100&fit=crop',
       },
     ],
   },
@@ -57,6 +60,7 @@ export const DEMO_ORDERS: Order[] = [
         sku: 'SCHN-CLASS-M',
         quantity: 1,
         price: 45.0,
+        imageUrl: 'https://images.unsplash.com/photo-1519904981063-b0cf448d479e?w=100&h=100&fit=crop',
       },
       {
         id: 'p5',
@@ -65,6 +69,7 @@ export const DEMO_ORDERS: Order[] = [
         sku: 'MASK-WV-SW',
         quantity: 1,
         price: 62.0,
+        imageUrl: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=100&h=100&fit=crop',
       },
     ],
   },
@@ -87,6 +92,7 @@ export const DEMO_ORDERS: Order[] = [
         sku: 'BCD-ATL-PRO-M',
         quantity: 1,
         price: 449.0,
+        imageUrl: 'https://images.unsplash.com/photo-1577720643272-265e434b3f48?w=100&h=100&fit=crop',
       },
     ],
   },
@@ -108,6 +114,7 @@ export const DEMO_ORDERS: Order[] = [
         sku: 'REG-EINST-SET',
         quantity: 1,
         price: 299.0,
+        imageUrl: 'https://images.unsplash.com/photo-1578500494198-246f612d782f?w=100&h=100&fit=crop',
       },
       {
         id: 'p8',
@@ -116,6 +123,7 @@ export const DEMO_ORDERS: Order[] = [
         sku: 'COMP-DECO-2500',
         quantity: 1,
         price: 189.0,
+        imageUrl: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=100&h=100&fit=crop',
       },
     ],
   },
