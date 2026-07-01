@@ -11,6 +11,7 @@ import UserSelectionScreen from '@/components/UserSelectionScreen'
 import { ArticleRow, type ArticleCapture } from '@/components/retouren-wizard/ArticleRow'
 import { Step1SelectPackage } from '@/components/retouren-wizard/Step1SelectPackage'
 import { Step2SearchOrder } from '@/components/retouren-wizard/Step2SearchOrder'
+import { Step3SelectArticles } from '@/components/retouren-wizard/Step3SelectArticles'
 import { SearchSpinner, ButtonSpinner, AsanaIcon } from '@/components/retouren-wizard/icons'
 
 type Photo = { id: string; dataUrl: string; name: string; type: string }
@@ -386,41 +387,11 @@ export default function RetourenWizard() {
 
         {/* ── STEP 3: Article list ── */}
         {step === 3 && (
-          <div>
-            <div style={{ marginBottom: 16 }}>
-              <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Artikel prüfen</h2>
-              <p style={{ fontSize: 14, color: 'var(--text-3)', lineHeight: 1.5 }}>
-                Welche Artikel wurden zurückgeschickt?
-              </p>
-            </div>
-
-            {/* Summary pill */}
-            {articles.some(a => a.returned !== null) && (
-              <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginBottom: 12 }}>
-                {articles.filter(a => a.returned === true).length} von {articles.length} zurückgekommen
-                {articles.filter(a => a.returned === null).length > 0 && (
-                  <span style={{ color: 'var(--gold)' }}> · {articles.filter(a => a.returned === null).length} noch offen</span>
-                )}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {articles.map((art, idx) => (
-                <ArticleRow
-                  key={art.itemId}
-                  article={art}
-                  onToggleReturned={(val) => updateArticle(idx, val ? { returned: true } : { returned: false, returnedQuantity: null, condition: null, reason: null, resolution: null, replacementProduct: null, photo: null })}
-                  onQuantity={(val) => updateArticle(idx, { returnedQuantity: val })}
-                  onCondition={(val) => updateArticle(idx, { condition: val })}
-                  onReason={(val) => updateArticle(idx, { reason: val })}
-                  onResolution={(val) => updateArticle(idx, { resolution: val })}
-                  onReplacementProduct={(val) => updateArticle(idx, { replacementProduct: val })}
-                  onCapturePhoto={() => capturePhoto(idx)}
-                  onRemovePhoto={() => updateArticle(idx, { photo: null })}
-                />
-              ))}
-            </div>
-          </div>
+          <Step3SelectArticles
+            articles={articles}
+            onUpdateArticle={updateArticle}
+            onCapturePhoto={capturePhoto}
+          />
         )}
 
         {/* ── STEP 4: Summary + Notes + Submit ── */}
