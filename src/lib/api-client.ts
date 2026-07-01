@@ -1,4 +1,5 @@
 import { getSessionToken } from './client-session'
+import type { ApiResponse } from './api-response'
 
 /**
  * Fetch wrapper that automatically includes JWT token in Authorization header
@@ -6,7 +7,7 @@ import { getSessionToken } from './client-session'
 export async function apiCall<T>(
   url: string,
   options?: RequestInit
-): Promise<T> {
+): Promise<ApiResponse<T>> {
   const token = getSessionToken()
 
   const headers = new Headers(options?.headers || {})
@@ -23,11 +24,11 @@ export async function apiCall<T>(
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}))
     throw new Error(
-      errorData.error || `API error: ${response.status} ${response.statusText}`
+      (errorData as any).error || `API error: ${response.status} ${response.statusText}`
     )
   }
 
-  return response.json() as Promise<T>
+  return response.json() as Promise<ApiResponse<T>>
 }
 
 /**
@@ -37,7 +38,7 @@ export async function apiPost<T>(
   url: string,
   data: unknown,
   options?: Omit<RequestInit, 'method' | 'body'>
-): Promise<T> {
+): Promise<ApiResponse<T>> {
   return apiCall<T>(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -52,7 +53,7 @@ export async function apiPost<T>(
 export async function apiDelete<T>(
   url: string,
   options?: Omit<RequestInit, 'method'>
-): Promise<T> {
+): Promise<ApiResponse<T>> {
   return apiCall<T>(url, {
     method: 'DELETE',
     ...options,

@@ -1,5 +1,6 @@
 import type { ReturnCapture } from '@/lib/types'
 import { verifySessionToken, extractSessionToken } from '@/lib/session'
+import { apiJson, successResponse, errorResponse } from '@/lib/api-response'
 
 const conditionLabel: Record<string, string> = {
   gut: 'Gut',
@@ -39,18 +40,12 @@ export async function POST(request: Request) {
   )
 
   if (!token) {
-    return Response.json(
-      { error: 'Unauthorized: No session token', status: 401 },
-      { status: 401 }
-    )
+    return apiJson(errorResponse('Unauthorized: No session token'), 401)
   }
 
   const operatorName = await verifySessionToken(token)
   if (!operatorName) {
-    return Response.json(
-      { error: 'Unauthorized: Invalid or expired session', status: 401 },
-      { status: 401 }
-    )
+    return apiJson(errorResponse('Unauthorized: Invalid or expired session'), 401)
   }
 
   const body: ReturnCapture = await request.json()
@@ -66,7 +61,7 @@ export async function POST(request: Request) {
   if (!asanaToken || !asanaProject) {
     console.log('[demo] Asana nicht konfiguriert — simuliere Einreichung:', body.orderId)
     await new Promise((r) => setTimeout(r, 800))
-    return Response.json({ success: true, mode: 'demo', taskId: 'DEMO-' + Date.now() })
+    return apiJson(successResponse({ mode: 'demo', taskId: 'DEMO-' + Date.now() }))
   }
 
   const date = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -142,7 +137,7 @@ export async function POST(request: Request) {
   if (!res.ok) {
     const err = await res.text()
     console.error('Asana API error:', res.status, err)
-    return Response.json({ error: 'Asana-Einreichung fehlgeschlagen', status: res.status, detail: err }, { status: 502 })
+    return apiJson(errorResponse('Asana submission failed'), 502)
   }
 
   const data = await res.json()
@@ -216,5 +211,5 @@ export async function POST(request: Request) {
     }
   }
 
-  return Response.json({ success: true, mode: 'live', taskId: taskGid })
+  return apiJson(successResponse({ mode: 'live', taskId: taskGid }))
 }

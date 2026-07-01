@@ -242,7 +242,12 @@ export default function RetourenWizard() {
         dhlReturn: isDhlReturn === true,
         photos: [labelPhoto, exteriorPhoto, slipPhoto, ...articles.map(a => a.photo)].filter((p): p is Photo => p !== null),
       }
-      const data = await apiPost<{ success: boolean; mode: string; taskId: string }>('/api/submit', body)
+      const response = await apiPost<{ mode: string; taskId: string }>('/api/submit', body)
+      const resp = response as any
+      if (!resp.success) {
+        throw new Error(resp.error || 'Submission failed')
+      }
+      const data = resp.data
       localStorage.removeItem(DRAFT_KEY)
       addToHistory({
         orderId: selectedOrder.id,

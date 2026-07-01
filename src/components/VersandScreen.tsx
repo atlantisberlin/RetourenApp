@@ -49,7 +49,7 @@ export default function VersandScreen() {
     setSubmitting(true)
     setError(null)
     try {
-      const data = await apiPost<{ success: boolean; mode: string; taskId: string }>('/api/versand', {
+      const response = await apiPost<{ mode: string; taskId: string }>('/api/versand', {
         carrier,
         trackingNumber: trackingNumber.trim(),
         deliveryNote: deliveryNote.trim(),
@@ -57,6 +57,11 @@ export default function VersandScreen() {
         notes: notes.trim(),
         photos,
       })
+      const resp = response as any
+      if (!resp.success) {
+        throw new Error(resp.error || 'Submission failed')
+      }
+      const data = resp.data
       addToVersandHistory({
         carrier,
         trackingNumber: trackingNumber.trim(),

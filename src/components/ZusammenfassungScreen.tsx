@@ -51,7 +51,12 @@ export default function ZusammenfassungScreen({ orderId }: { orderId: string }) 
     setSubmitting(true)
     setError(null)
     try {
-      const data = await apiPost<{ success: boolean; mode: string; taskId: string }>('/api/submit', capture)
+      const response = await apiPost<{ mode: string; taskId: string }>('/api/submit', capture)
+      const resp = response as any
+      if (!resp.success) {
+        throw new Error(resp.error || 'Submission failed')
+      }
+      const data = resp.data
       setTaskId(data.taskId)
       setMode((data.mode as 'live' | 'demo') || 'demo')
       setSubmitted(true)

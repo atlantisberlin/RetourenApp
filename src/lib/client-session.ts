@@ -19,20 +19,24 @@ export async function createSession(operatorName: string): Promise<string> {
       throw new Error(`Failed to create session: ${response.status}`)
     }
 
-    const data = (await response.json()) as {
-      token: string
-      expiresIn: string
-      operatorName: string
+    const response_data = (await response.json()) as {
+      success: boolean
+      data?: { token: string; expiresIn: string; operatorName: string }
+      error?: string
+    }
+
+    if (!response_data.success || !response_data.data) {
+      throw new Error(response_data.error || 'Failed to create session')
     }
 
     // Store token in localStorage
-    localStorage.setItem(SESSION_TOKEN_KEY, data.token)
+    localStorage.setItem(SESSION_TOKEN_KEY, response_data.data.token)
 
     // Also store operator name for getOperator() compatibility
-    localStorage.setItem(OPERATOR_NAME_KEY, data.operatorName)
+    localStorage.setItem(OPERATOR_NAME_KEY, response_data.data.operatorName)
     localStorage.setItem(OPERATOR_TS_KEY, String(Date.now()))
 
-    return data.token
+    return response_data.data.token
   } catch (error) {
     console.error('Session creation failed:', error)
     throw error
