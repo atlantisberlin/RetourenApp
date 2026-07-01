@@ -52,11 +52,13 @@ export default function ZusammenfassungScreen({ orderId }: { orderId: string }) 
     setError(null)
     try {
       const response = await apiPost<{ mode: string; taskId: string }>('/api/submit', capture)
-      if (!response.success || !response.data) {
-        throw new Error(response.error || 'Submission failed')
+      const resp = response as any
+      if (!resp.success) {
+        throw new Error(resp.error || 'Submission failed')
       }
-      setTaskId(response.data.taskId)
-      setMode((response.data.mode as 'live' | 'demo') || 'demo')
+      const data = resp.data
+      setTaskId(data.taskId)
+      setMode((data.mode as 'live' | 'demo') || 'demo')
       setSubmitted(true)
       localStorage.removeItem('return_capture')
       const returnedItems2 = capture.items.filter((i) => i.returned)
@@ -72,7 +74,7 @@ export default function ZusammenfassungScreen({ orderId }: { orderId: string }) 
           const oi = capture.order.items.find((o) => o.id === item.itemId)
           return { productName: oi?.productName ?? item.itemId, condition: item.condition, reason: item.reason, resolution: item.resolution }
         }),
-        taskId: response.data.taskId ?? undefined,
+        taskId: data.taskId ?? undefined,
       })
     } catch (e) {
       setError(String(e))

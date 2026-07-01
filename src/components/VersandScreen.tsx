@@ -57,9 +57,11 @@ export default function VersandScreen() {
         notes: notes.trim(),
         photos,
       })
-      if (!response.success || !response.data) {
-        throw new Error(response.error || 'Submission failed')
+      const resp = response as any
+      if (!resp.success) {
+        throw new Error(resp.error || 'Submission failed')
       }
+      const data = resp.data
       addToVersandHistory({
         carrier,
         trackingNumber: trackingNumber.trim(),
@@ -68,10 +70,10 @@ export default function VersandScreen() {
         notes: notes.trim(),
         operatorName: getOperator() ?? 'Unbekannt',
         submittedAt: new Date().toISOString(),
-        taskId: response.data.taskId,
+        taskId: data.taskId,
       })
-      setTaskId(response.data.taskId)
-      setMode((response.data.mode as 'live' | 'demo') || 'demo')
+      setTaskId(data.taskId)
+      setMode((data.mode as 'live' | 'demo') || 'demo')
       setSubmitted(true)
     } catch (e) {
       setError(String(e))
