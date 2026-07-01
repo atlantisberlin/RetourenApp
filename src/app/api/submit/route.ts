@@ -1,7 +1,6 @@
-import type { ReturnCapture } from '@/lib/types'
 import { verifySessionToken, extractSessionToken } from '@/lib/session'
 import { apiJson, successResponse, errorResponse } from '@/lib/api-response'
-import { ReturnCaptureSchema } from '@/lib/schemas'
+import { ReturnCaptureSchema, type ReturnCapture } from '@/lib/schemas'
 import { z } from 'zod'
 
 const conditionLabel: Record<string, string> = {
@@ -49,7 +48,7 @@ export async function POST(request: Request) {
     }
 
     const rawBody = await request.json()
-    const body = ReturnCaptureSchema.parse(rawBody) as ReturnCapture
+    const body = ReturnCaptureSchema.parse(rawBody)
 
   const asanaToken = process.env.ASANA_TOKEN
   const asanaProject = process.env.ASANA_PROJECT_GID
