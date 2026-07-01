@@ -110,7 +110,31 @@ export async function POST(request: Request) {
 
   const html_notes = `<body><h2>Auftrag</h2><ul>${metaRows}</ul><h2>Zurückgekommene Positionen</h2><ul>${itemHtml}</ul>${bemerkungHtml}</body>`
 
-  console.log('[Asana] html_notes:', html_notes)
+  console.log('[Asana] Task name:', title)
+  console.log('[Asana] Photos count:', body.photos?.length ?? 0)
+  console.log('[Asana] html_notes length:', html_notes.length)
+  console.log('[Asana] Tags:', [
+    ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
+    ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
+    ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
+    ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
+    ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
+  ])
+
+  const taskPayload = {
+    data: {
+      name: title,
+      html_notes,
+      projects: [asanaProject],
+      tags: [
+        ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
+        ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
+        ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
+        ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
+        ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
+      ],
+    },
+  }
 
   const res = await fetch('https://app.asana.com/api/1.0/tasks', {
     method: 'POST',
@@ -118,25 +142,14 @@ export async function POST(request: Request) {
       Authorization: `Bearer ${asanaToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      data: {
-        name: title,
-        html_notes,
-        projects: [asanaProject],
-        tags: [
-          ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
-          ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
-          ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
-          ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
-          ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
-        ],
-      },
-    }),
+    body: JSON.stringify(taskPayload),
   })
 
   if (!res.ok) {
     const err = await res.text()
-    console.error('Asana API error:', res.status, err)
+    console.error('Asana API error:', res.status)
+    console.error('Asana error body:', err)
+    console.error('Task payload size:', JSON.stringify(taskPayload).length, 'bytes')
     return apiJson(errorResponse('Asana submission failed'), 502)
   }
 
@@ -174,12 +187,16 @@ export async function POST(request: Request) {
   }
 
   // Fotos als Anhänge hochladen
+  const photoErrors: string[] = []
   if (taskGid && body.photos && body.photos.length > 0) {
     for (let i = 0; i < body.photos.length; i++) {
       const photo = body.photos[i]
       try {
         const matches = photo.dataUrl.match(/^data:([^;]+);base64,(.+)$/)
-        if (!matches) continue
+        if (!matches) {
+          photoErrors.push(`Foto ${i + 1}: Ungültiges Datenformat`)
+          continue
+        }
         const mimeType = matches[1]
         const base64Data = matches[2]
         const buffer = Buffer.from(base64Data, 'base64')
@@ -187,9 +204,7 @@ export async function POST(request: Request) {
         // Check file size limit (10MB)
         if (buffer.length > MAX_PHOTO_SIZE) {
           const sizeMB = (buffer.length / 1024 / 1024).toFixed(2)
-          console.warn(
-            `Photo ${i + 1} exceeds size limit: ${sizeMB}MB > 10MB, skipping`,
-          )
+          photoErrors.push(`Foto ${i + 1}: ${sizeMB}MB > 10MB Limit`)
           continue
         }
 
@@ -203,12 +218,21 @@ export async function POST(request: Request) {
           body: formData,
         })
         if (!attachRes.ok) {
-          console.error(`Foto-Upload fehlgeschlagen:`, await attachRes.text())
+          const err = await attachRes.text()
+          console.error(`Foto-Upload ${i + 1} fehlgeschlagen (${attachRes.status}):`, err)
+          photoErrors.push(`Foto ${i + 1}: Asana API Fehler ${attachRes.status}`)
+        } else {
+          console.log(`Foto ${i + 1} erfolgreich hochgeladen`)
         }
       } catch (err) {
         console.error(`Fehler beim Upload von Foto ${i + 1}:`, err)
+        photoErrors.push(`Foto ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
+  }
+
+  if (photoErrors.length > 0) {
+    console.warn('Photo upload errors:', photoErrors)
   }
 
   return apiJson(successResponse({ mode: 'live', taskId: taskGid }))
