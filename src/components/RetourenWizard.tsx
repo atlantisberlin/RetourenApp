@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { getOperator, refreshActivity } from '@/lib/operator'
 import { addToHistory } from '@/lib/history'
+import { apiPost } from '@/lib/api-client'
 import type { Order, OrderItem, ReturnCapture, ReturnCondition, ReturnReason, ReturnResolution, ReplacementProduct } from '@/lib/types'
 import UserSelectionScreen from '@/components/UserSelectionScreen'
 
@@ -241,9 +242,7 @@ export default function RetourenWizard() {
         dhlReturn: isDhlReturn === true,
         photos: [labelPhoto, exteriorPhoto, slipPhoto, ...articles.map(a => a.photo)].filter((p): p is Photo => p !== null),
       }
-      const res = await fetch('/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Fehler beim Senden')
+      const data = await apiPost<{ success: boolean; mode: string; taskId: string }>('/api/submit', body)
       localStorage.removeItem(DRAFT_KEY)
       addToHistory({
         orderId: selectedOrder.id,

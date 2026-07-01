@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { ReturnCapture } from '@/lib/types'
+import { apiPost } from '@/lib/api-client'
 import { StepIndicator } from './FotosScreen'
 import { addToHistory } from '@/lib/history'
 
@@ -50,15 +51,9 @@ export default function ZusammenfassungScreen({ orderId }: { orderId: string }) 
     setSubmitting(true)
     setError(null)
     try {
-      const res = await fetch('/api/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(capture),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Unbekannter Fehler')
+      const data = await apiPost<{ success: boolean; mode: string; taskId: string }>('/api/submit', capture)
       setTaskId(data.taskId)
-      setMode(data.mode)
+      setMode((data.mode as 'live' | 'demo') || 'demo')
       setSubmitted(true)
       localStorage.removeItem('return_capture')
       const returnedItems2 = capture.items.filter((i) => i.returned)
