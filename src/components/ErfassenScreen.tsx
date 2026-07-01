@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { Order, ReturnCondition, ReturnReason, ReturnResolution, ReturnItemCapture } from '@/lib/types'
@@ -175,7 +176,7 @@ export default function ErfassenScreen({ order }: { order: Order }) {
                     style={{ marginTop: 2 }}
                   />
                   {item.imageUrl && (
-                    <img src={item.imageUrl} alt={item.productName} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
+                    <Image src={item.imageUrl} alt={item.productName} width={44} height={44} style={{ objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 3, lineHeight: 1.3 }}>

@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import Image from 'next/image'
 import type { ReplacementProduct, ReturnCondition, ReturnReason } from '@/lib/types'
 import { CameraIcon, DivingIcon } from './icons'
 
@@ -97,7 +98,7 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
         {/* Product image */}
         <div style={{ width: 48, height: 48, borderRadius: 8, flexShrink: 0, background: 'var(--surface-3)', border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           {article.imageUrl ? (
-            <img src={article.imageUrl} alt={article.productName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <Image src={article.imageUrl} alt={article.productName} fill style={{ objectFit: 'cover' }} />
           ) : (
             <DivingIcon />
           )}
