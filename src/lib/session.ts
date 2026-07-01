@@ -1,5 +1,4 @@
 import { SignJWT, jwtVerify } from 'jose'
-import { randomBytes } from 'crypto'
 
 function getJwtSecret(): string {
   const envSecret = process.env.JWT_SECRET
@@ -22,15 +21,14 @@ function getJwtSecret(): string {
     return envSecret
   }
 
-  const devSecret = randomBytes(32).toString('hex')
   if (!process.env.SUPPRESS_DEV_SECRET_WARNING) {
     console.warn(
-      '⚠️  JWT_SECRET not set. Using generated dev secret.\n' +
+      '⚠️  JWT_SECRET not set. Using static dev secret.\n' +
       '   This is OK for development only.\n' +
-      '   For production, set JWT_SECRET env var.'
+      '   For production, ALWAYS set JWT_SECRET env var to a secure random value.'
     )
   }
-  return devSecret
+  return 'dev-only-insecure-key-change-for-production-32char'
 }
 
 const JWT_SECRET = getJwtSecret()
