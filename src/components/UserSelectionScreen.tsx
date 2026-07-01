@@ -1,21 +1,32 @@
 'use client'
 
 import { useState } from 'react'
-import { OPERATORS, setOperator } from '@/lib/operator'
+import { OPERATORS } from '@/lib/operator'
+import { createSession } from '@/lib/client-session'
 
 export default function UserSelectionScreen({ onSelect }: { onSelect: (name: string) => void }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   function handleTile(name: string) {
     setSelected((prev) => (prev === name ? null : name))
+    setError(null)
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
     if (!selected) return
-    setOperator(selected)
-    setConfirming(true)
-    setTimeout(() => onSelect(selected), 1400)
+
+    try {
+      setError(null)
+      // Create JWT session on backend
+      await createSession(selected)
+      setConfirming(true)
+      setTimeout(() => onSelect(selected), 1400)
+    } catch (err) {
+      setError('Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.')
+      console.error('Session creation error:', err)
+    }
   }
 
   if (confirming && selected) {
@@ -61,6 +72,20 @@ export default function UserSelectionScreen({ onSelect }: { onSelect: (name: str
         alignItems: 'center', justifyContent: 'center',
         padding: '24px 20px 40px', gap: 28,
       }}>
+        {error && (
+          <div style={{
+            background: 'var(--red-bg)',
+            border: '1px solid var(--red-border)',
+            color: 'var(--red)',
+            padding: '12px 16px',
+            borderRadius: 'var(--radius)',
+            fontSize: 14,
+            maxWidth: 520,
+            textAlign: 'center',
+          }}>
+            {error}
+          </div>
+        )}
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.14em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>
             Wareneingang
