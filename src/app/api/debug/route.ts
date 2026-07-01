@@ -1,4 +1,5 @@
 import { BigQuery } from '@google-cloud/bigquery'
+import { verifySessionToken, extractSessionToken } from '@/lib/session'
 
 const PROJECT = process.env.BQ_PROJECT ?? 'zentrallager'
 const DATASET = process.env.BQ_DATASET ?? 'ATLOS'
@@ -36,11 +37,27 @@ async function runStep(label: string, fn: () => Promise<unknown>) {
     const result = await fn()
     return { step: label, ok: true, result }
   } catch (e) {
-    return { step: label, ok: false, error: String(e), stack: (e as Error)?.stack }
+    console.error(`[debug] ${label}:`, e)
+    return { step: label, ok: false, error: 'Database operation failed' }
   }
 }
 
 export async function GET(request: Request) {
+  // ✅ AUTHENTIFIZIERUNG HINZUGEFÜGT
+  const token = extractSessionToken(
+    request.headers.get('authorization') ?? undefined,
+    request.headers.get('cookie') ?? undefined
+  )
+
+  if (!token) {
+    return Response.json({ error: 'Unauthorized: No session token' }, { status: 401 })
+  }
+
+  const operatorName = await verifySessionToken(token)
+  if (!operatorName) {
+    return Response.json({ error: 'Unauthorized: Invalid or expired session' }, { status: 401 })
+  }
+
   const { searchParams } = new URL(request.url)
   const q = searchParams.get('q') ?? ''
   const id = searchParams.get('id') ?? ''
