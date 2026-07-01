@@ -96,9 +96,9 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
       {/* Main row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px' }}>
         {/* Product image */}
-        <div style={{ position: 'relative', width: 48, height: 48, borderRadius: 8, flexShrink: 0, background: 'var(--surface-3)', border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <div style={{ width: 48, height: 48, borderRadius: 8, flexShrink: 0, background: 'var(--surface-3)', border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           {article.imageUrl ? (
-            <Image src={article.imageUrl} alt={article.productName} fill style={{ objectFit: 'cover' }} />
+            <Image src={article.imageUrl} alt={article.productName} width={48} height={48} style={{ objectFit: 'cover' }} />
           ) : (
             <DivingIcon />
           )}
