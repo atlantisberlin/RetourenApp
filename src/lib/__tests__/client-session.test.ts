@@ -39,9 +39,12 @@ describe('client-session', () => {
   describe('createSession', () => {
     it('should store token and operator name in localStorage', async () => {
       const mockResponse = {
-        token: 'test-jwt-token',
-        expiresIn: '24h',
-        operatorName: 'Erik',
+        success: true,
+        data: {
+          token: 'test-jwt-token',
+          expiresIn: '24h',
+          operatorName: 'Erik',
+        },
       }
 
       ;(global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -58,9 +61,12 @@ describe('client-session', () => {
 
     it('should call POST /api/auth/session with operatorName', async () => {
       const mockResponse = {
-        token: 'test-token',
-        expiresIn: '24h',
-        operatorName: 'Josi',
+        success: true,
+        data: {
+          token: 'test-token',
+          expiresIn: '24h',
+          operatorName: 'Josi',
+        },
       }
 
       ;(global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -81,6 +87,7 @@ describe('client-session', () => {
       ;(global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: false,
         status: 500,
+        json: async () => ({ success: false, error: 'Internal error' }),
       })
 
       await expect(createSession('Erik')).rejects.toThrow()
@@ -88,9 +95,12 @@ describe('client-session', () => {
 
     it('should return token', async () => {
       const mockResponse = {
-        token: 'test-jwt-token',
-        expiresIn: '24h',
-        operatorName: 'Erik',
+        success: true,
+        data: {
+          token: 'test-jwt-token',
+          expiresIn: '24h',
+          operatorName: 'Erik',
+        },
       }
 
       ;(global.fetch as jest.Mock).mockResolvedValueOnce({

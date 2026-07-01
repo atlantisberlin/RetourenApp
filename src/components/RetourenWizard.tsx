@@ -242,7 +242,10 @@ export default function RetourenWizard() {
         dhlReturn: isDhlReturn === true,
         photos: [labelPhoto, exteriorPhoto, slipPhoto, ...articles.map(a => a.photo)].filter((p): p is Photo => p !== null),
       }
-      const data = await apiPost<{ success: boolean; mode: string; taskId: string }>('/api/submit', body)
+      const response = await apiPost<{ mode: string; taskId: string }>('/api/submit', body)
+      if (!response.success || !response.data) {
+        throw new Error(response.error || 'Submission failed')
+      }
       localStorage.removeItem(DRAFT_KEY)
       addToHistory({
         orderId: selectedOrder.id,
@@ -258,10 +261,10 @@ export default function RetourenWizard() {
           reason: a.reason ?? 'sonstiges',
           resolution: 'erstattung',
         })),
-        taskId: data.taskId,
+        taskId: response.data.taskId,
       })
-      setTaskId(data.taskId)
-      setSubmitMode(data.mode)
+      setTaskId(response.data.taskId)
+      setSubmitMode(response.data.mode)
       setSubmitted(true)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler')

@@ -1,4 +1,5 @@
 import { verifySessionToken, extractSessionToken } from '@/lib/session'
+import { apiJson, successResponse, errorResponse } from '@/lib/api-response'
 
 type Photo = { id: string; dataUrl: string; name: string; type: string }
 
@@ -21,18 +22,12 @@ export async function POST(request: Request) {
   )
 
   if (!token) {
-    return Response.json(
-      { error: 'Unauthorized: No session token', status: 401 },
-      { status: 401 }
-    )
+    return apiJson(errorResponse('Unauthorized: No session token'), 401)
   }
 
   const operatorName = await verifySessionToken(token)
   if (!operatorName) {
-    return Response.json(
-      { error: 'Unauthorized: Invalid or expired session', status: 401 },
-      { status: 401 }
-    )
+    return apiJson(errorResponse('Unauthorized: Invalid or expired session'), 401)
   }
 
   const body: VersandBody = await request.json()
@@ -43,7 +38,7 @@ export async function POST(request: Request) {
   if (!asanaToken || !asanaProject) {
     console.log('[demo] Asana Versand nicht konfiguriert — simuliere Einreichung:', body.trackingNumber)
     await new Promise((r) => setTimeout(r, 800))
-    return Response.json({ success: true, mode: 'demo', taskId: 'DEMO-VERSAND-' + Date.now() })
+    return apiJson(successResponse({ mode: 'demo', taskId: 'DEMO-VERSAND-' + Date.now() }))
   }
 
   const date = new Date().toLocaleDateString('de-DE', {
@@ -86,7 +81,7 @@ export async function POST(request: Request) {
   if (!res.ok) {
     const err = await res.text()
     console.error('Asana Versand API error:', err)
-    return Response.json({ error: 'Asana-Einreichung fehlgeschlagen' }, { status: 502 })
+    return apiJson(errorResponse('Asana submission failed'), 502)
   }
 
   const data = await res.json()
@@ -130,5 +125,5 @@ export async function POST(request: Request) {
     }
   }
 
-  return Response.json({ success: true, mode: 'live', taskId: taskGid })
+  return apiJson(successResponse({ mode: 'live', taskId: taskGid }))
 }
