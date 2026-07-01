@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     return Response.json({ orders, query: validated.q, mode: 'demo' })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return apiJson(errorResponse(`Invalid input: ${error.errors[0].message}`), 400)
+      return apiJson(errorResponse(`Invalid input: ${error.issues[0]?.message || 'Invalid input'}`), 400)
     }
     console.error('Search error:', error)
     return apiJson(errorResponse('Search failed'), 500)

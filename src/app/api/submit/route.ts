@@ -240,7 +240,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return apiJson(
-        errorResponse(`Invalid input: ${error.errors[0].message}`),
+        errorResponse(`Invalid input: ${error.issues[0]?.message || 'Invalid input'}`),
         400
       )
     }
