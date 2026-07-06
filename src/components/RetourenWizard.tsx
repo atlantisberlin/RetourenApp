@@ -6,6 +6,8 @@ import { getOperator, refreshActivity } from '@/lib/operator'
 import { addToHistory } from '@/lib/history'
 import { apiPost } from '@/lib/api-client'
 import type { ApiResponse } from '@/lib/api-response'
+import { compressImageToDataUrl } from '@/lib/compress-image'
+import { uploadPhotosToTask } from '@/lib/photo-upload'
 import type { Order, OrderItem, ReturnCapture, ReturnCondition, ReturnReason, ReturnResolution, ReplacementProduct } from '@/lib/types'
 import UserSelectionScreen from '@/components/UserSelectionScreen'
 import { type ArticleCapture } from '@/components/retouren-wizard/ArticleRow'
@@ -50,6 +52,8 @@ export default function RetourenWizard() {
   const [taskId, setTaskId] = useState<string | null>(null)
   const [submitMode, setSubmitMode] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null)
+  const [photoWarning, setPhotoWarning] = useState<string | null>(null)
 
   const fileRef = useRef<HTMLInputElement>(null)
   const photoTargetRef = useRef<'label' | 'exterior' | 'slip' | number>('label')
@@ -156,20 +160,18 @@ export default function RetourenWizard() {
     fileRef.current?.click()
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const photo: Photo = { id: Date.now().toString(), dataUrl: ev.target?.result as string, name: file.name, type: file.type }
-      const t = photoTargetRef.current
-      if (t === 'label') setLabelPhoto(photo)
-      else if (t === 'exterior') setExteriorPhoto(photo)
-      else if (t === 'slip') setSlipPhoto(photo)
-      else if (typeof t === 'number') setArticles(prev => prev.map((a, i) => i === t ? { ...a, photo } : a))
-    }
-    reader.readAsDataURL(file)
     e.target.value = ''
+    // Komprimieren, damit einzelne Uploads klein bleiben (kein 413 mehr)
+    const dataUrl = await compressImageToDataUrl(file)
+    const photo: Photo = { id: Date.now().toString(), dataUrl, name: file.name, type: file.type }
+    const t = photoTargetRef.current
+    if (t === 'label') setLabelPhoto(photo)
+    else if (t === 'exterior') setExteriorPhoto(photo)
+    else if (t === 'slip') setSlipPhoto(photo)
+    else if (typeof t === 'number') setArticles(prev => prev.map((a, i) => i === t ? { ...a, photo } : a))
   }
 
   const handleSearchChange = (q: string) => {
@@ -200,7 +202,8 @@ export default function RetourenWizard() {
     setError(null)
     refreshActivity()
     try {
-      // Exclude photos from submission to avoid 413 Payload Too Large
+      // Fotos werden NICHT mitgesendet (413 Payload Too Large), sondern
+      // nach dem Anlegen der Aufgabe einzeln über /api/attach-photo hochgeladen
       const body: ReturnCapture = {
         orderId: selectedOrder.id,
         order: selectedOrder,
@@ -227,6 +230,27 @@ export default function RetourenWizard() {
         throw new Error(resp.error || 'Submission failed')
       }
       const data = resp.data
+
+      // Fotos einzeln zur angelegten Asana-Aufgabe hochladen
+      const photos = [
+        labelPhoto ? { dataUrl: labelPhoto.dataUrl, type: 'etikett' } : null,
+        exteriorPhoto ? { dataUrl: exteriorPhoto.dataUrl, type: 'paket' } : null,
+        slipPhoto ? { dataUrl: slipPhoto.dataUrl, type: 'schein' } : null,
+        ...articles.map(a => a.photo ? { dataUrl: a.photo.dataUrl, type: 'artikel' } : null),
+      ].filter((p): p is { dataUrl: string; type: string } => p !== null)
+
+      if (photos.length > 0 && data.mode === 'live' && data.taskId) {
+        setPhotoProgress({ done: 0, total: photos.length })
+        const uploadResult = await uploadPhotosToTask(data.taskId, photos, (done, total) => {
+          setPhotoProgress({ done, total })
+        })
+        setPhotoProgress(null)
+        if (uploadResult.failed > 0) {
+          console.error('Foto-Upload-Fehler:', uploadResult.errors)
+          setPhotoWarning(`${uploadResult.uploaded} von ${photos.length} Fotos hochgeladen. Fehlgeschlagen: ${uploadResult.errors.join('; ')}`)
+        }
+      }
+
       localStorage.removeItem(DRAFT_KEY)
       addToHistory({
         orderId: selectedOrder.id,
@@ -266,6 +290,11 @@ export default function RetourenWizard() {
         <p style={{ fontSize: 14, color: 'var(--text-3)', marginBottom: submitMode === 'demo' ? 8 : 32, textAlign: 'center' }}>
           Die Retoure wurde erfolgreich erfasst und an Asana übermittelt.
         </p>
+        {photoWarning && (
+          <div style={{ fontSize: 13, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '10px 14px', marginBottom: 24, maxWidth: 360, textAlign: 'center' }}>
+            ⚠️ {photoWarning}
+          </div>
+        )}
         {submitMode === 'demo' && (
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '8px 14px', marginBottom: 32 }}>
             Demo-Modus · {taskId}
@@ -278,7 +307,7 @@ export default function RetourenWizard() {
           localStorage.removeItem(DRAFT_KEY)
           setStep(1); setTrackingNumber(''); setIsDhlReturn(null); setLabelPhoto(null); setExteriorPhoto(null); setSlipPhoto(null)
           setSearchQuery(''); setSearchResults([]); setSelectedOrder(null); setArticles([])
-          setNotes(''); setSubmitted(false); setTaskId(null); setError(null)
+          setNotes(''); setSubmitted(false); setTaskId(null); setError(null); setPhotoWarning(null)
         }}>
           Neue Retoure
         </button>
@@ -406,7 +435,9 @@ export default function RetourenWizard() {
         </button>
         <button className="btn btn-primary" onClick={handleNext} disabled={!isNextEnabled || submitting} style={{ flex: 1, opacity: !isNextEnabled ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           {step === 4
-            ? submitting ? <><ButtonSpinner /> Wird gesendet…</> : <><AsanaIcon /> An Asana senden</>
+            ? submitting
+              ? <><ButtonSpinner /> {photoProgress ? `Foto ${photoProgress.done}/${photoProgress.total} wird hochgeladen…` : 'Wird gesendet…'}</>
+              : <><AsanaIcon /> An Asana senden</>
             : 'Weiter'
           }
         </button>
