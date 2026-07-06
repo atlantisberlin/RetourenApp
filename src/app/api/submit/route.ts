@@ -20,16 +20,6 @@ const reasonLabel: Record<string, string> = {
 
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024 // 10MB
 
-function escapeHtml(str: string): string {
-  return str
-    // strip characters invalid in XML 1.0 (control chars except tab/LF/CR)
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
 export async function POST(request: Request) {
   // ──────────────────────────────────────────────────────────────
   // 1. VERIFY SESSION TOKEN (NEW: JWT-based security)
@@ -74,41 +64,41 @@ export async function POST(request: Request) {
 
   const returnedItems = body.items.filter((i) => i.returned)
 
-  // ── html_notes ──────────────────────────────────────────────────────────────
-  const itemHtml = returnedItems.map((item) => {
+  // ── html_notes as plain text to avoid XML parsing errors ──────────────────
+  const itemLines = returnedItems.map((item) => {
     const orderItem = body.order.items.find((i) => i.id === item.itemId)
-    const name = escapeHtml(orderItem?.productName ?? item.itemId)
-    const cond = escapeHtml(conditionLabel[item.condition] ?? item.condition)
-    const reason = escapeHtml(reasonLabel[item.reason] ?? item.reason)
+    const name = orderItem?.productName ?? item.itemId
+    const cond = conditionLabel[item.condition] ?? item.condition
+    const reason = reasonLabel[item.reason] ?? item.reason
     const resolution = item.resolution === 'erstattung' ? 'Erstattung' : 'Umtausch'
-    const notes = item.notes ? ` - <em>${escapeHtml(item.notes)}</em>` : ''
+    const notes = item.notes ? ` - ${item.notes}` : ''
     const repl = item.replacementProduct
-      ? ` - Umtausch gegen: ${escapeHtml(item.replacementProduct.name)}${item.replacementProduct.sku ? ` (${escapeHtml(item.replacementProduct.sku)})` : ''}`
+      ? ` - Umtausch gegen: ${item.replacementProduct.name}${item.replacementProduct.sku ? ` (${item.replacementProduct.sku})` : ''}`
       : ''
-    return `<li><strong>${name}</strong> | ${item.returnedQuantity}x - Zustand: ${cond} - Grund: ${reason} - ${resolution}${repl}${notes}</li>`
+    return `• ${name} | ${item.returnedQuantity}x - Zustand: ${cond} - Grund: ${reason} - ${resolution}${repl}${notes}`
   }).join('\n')
 
   // Rechnungsnr: invoiceNr ist die echte Rechnungsnummer, invoiceNumber ist bs_nr (Bestellnr.)
   const rechnungsNr = body.order.invoiceNr
 
-  const metaRows = [
-    `<li><strong>Bearbeitet von:</strong> ${escapeHtml(operatorName)}</li>`,
-    `<li><strong>Bestellnr.:</strong> ${escapeHtml(body.order.orderNumber)}</li>`,
-    `<li><strong>Kundennr.:</strong> ${escapeHtml(body.order.customerNumber)}</li>`,
-    `<li><strong>Kunde:</strong> ${escapeHtml(body.order.customerName)}</li>`,
-    rechnungsNr ? `<li><strong>Rechnungsnr.:</strong> ${escapeHtml(rechnungsNr)}</li>` : null,
-    body.order.deliveryNoteNumber ? `<li><strong>Lieferscheinnr.:</strong> ${escapeHtml(body.order.deliveryNoteNumber)}</li>` : null,
+  const metaLines = [
+    `Bearbeitet von: ${operatorName}`,
+    `Bestellnr.: ${body.order.orderNumber}`,
+    `Kundennr.: ${body.order.customerNumber}`,
+    `Kunde: ${body.order.customerName}`,
+    rechnungsNr ? `Rechnungsnr.: ${rechnungsNr}` : null,
+    body.order.deliveryNoteNumber ? `Lieferscheinnr.: ${body.order.deliveryNoteNumber}` : null,
     body.order.activeRetourenNr
-      ? `<li><strong>Retourennr.:</strong> ${escapeHtml(body.order.activeRetourenNr)}</li>`
-      : `<li><strong>Retourennr.:</strong> ___________ <em>(bitte nachtragen)</em></li>`,
-    body.trackingNumber ? `<li><strong>Tracking:</strong> ${escapeHtml(body.trackingNumber)}</li>` : null,
+      ? `Retourennr.: ${body.order.activeRetourenNr}`
+      : `Retourennr.: ___________ (bitte nachtragen)`,
+    body.trackingNumber ? `Tracking: ${body.trackingNumber}` : null,
   ].filter(Boolean).join('\n')
 
-  const bemerkungHtml = body.notes
-    ? `<h2>Bemerkungen</h2><p>${escapeHtml(body.notes)}</p>`
+  const bemerkungText = body.notes
+    ? `\n\nBemerkungen:\n${body.notes}`
     : ''
 
-  const html_notes = `<body><h2>Auftrag</h2><ul>${metaRows}</ul><h2>Zurückgekommene Positionen</h2><ul>${itemHtml}</ul>${bemerkungHtml}</body>`
+  const html_notes = `AUFTRAG\n${metaLines}\n\nZURÜCKGEKOMMENE POSITIONEN\n${itemLines}${bemerkungText}`
 
   console.log('[Asana] Task name:', title)
   console.log('[Asana] Photos count:', body.photos?.length ?? 0)
