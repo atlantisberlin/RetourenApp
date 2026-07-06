@@ -113,6 +113,7 @@ export async function POST(request: Request) {
   console.log('[Asana] Task name:', title)
   console.log('[Asana] Photos count:', body.photos?.length ?? 0)
   console.log('[Asana] html_notes length:', html_notes.length)
+  console.log('[Asana] Photos included in payload:', !!body.photos)
   console.log('[Asana] Tags:', [
     ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
     ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
