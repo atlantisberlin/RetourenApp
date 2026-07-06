@@ -22,6 +22,12 @@ const MAX_PHOTO_SIZE = 10 * 1024 * 1024 // 10MB
 
 function escapeHtmlContent(str: string): string {
   return str
+    // strip characters that Asana's XML parser rejects: C0 controls (except
+    // tab/LF/CR, e.g. GS1 barcode separators from scanners), DEL, C1 controls,
+    // unpaired surrogates and non-characters
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F￾￿]/g, '')
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '')
+    .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -120,35 +126,44 @@ export async function POST(request: Request) {
     ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
   ])
 
-  const taskPayload = {
-    data: {
-      name: title,
-      html_notes,
-      projects: [asanaProject],
-      tags: [
-        ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
-        ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
-        ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
-        ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
-        ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
-      ],
-    },
+  const tags = [
+    ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
+    ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
+    ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
+    ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
+    ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
+  ]
+
+  async function createTask(payload: object): Promise<Response> {
+    return fetch('https://app.asana.com/api/1.0/tasks', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${asanaToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
   }
 
-  const res = await fetch('https://app.asana.com/api/1.0/tasks', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${asanaToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(taskPayload),
-  })
+  let res = await createTask({ data: { name: title, html_notes, projects: [asanaProject], tags } })
+
+  // Fallback: wenn Asana das HTML ablehnt (400), stattdessen als Plain-Text
+  // senden, damit die Retoure nie an der Formatierung scheitert
+  if (res.status === 400) {
+    const err = await res.text()
+    console.error('Asana lehnte html_notes ab (400), Fallback auf Plain-Text. Error:', err)
+    console.error('html_notes war:', JSON.stringify(html_notes))
+    const plainNotes = html_notes
+      .replace(/<\/(h2|li|p)>/g, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+    res = await createTask({ data: { name: title, notes: plainNotes, projects: [asanaProject], tags } })
+  }
 
   if (!res.ok) {
     const err = await res.text()
     console.error('Asana API error:', res.status)
     console.error('Asana error body:', err)
-    console.error('Task payload size:', JSON.stringify(taskPayload).length, 'bytes')
     return apiJson(errorResponse('Asana submission failed'), 502)
   }
 
