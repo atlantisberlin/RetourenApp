@@ -18,7 +18,7 @@ export type ArticleCapture = {
   reason: string | null
   resolution: 'erstattung' | 'umtausch' | null
   replacementProduct: ReplacementProduct | null
-  photo: Photo | null
+  photos: Photo[]
   existingRetoure?: string | null
   existingGutschrift?: string | null
 }
@@ -48,7 +48,7 @@ type ArticleRowProps = {
   onResolution: (val: 'erstattung' | 'umtausch') => void
   onReplacementProduct: (val: ReplacementProduct | null) => void
   onCapturePhoto: () => void
-  onRemovePhoto: () => void
+  onRemovePhoto: (photoId: string) => void
 }
 
 export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition, onReason, onResolution, onReplacementProduct, onCapturePhoto, onRemovePhoto }: ArticleRowProps) {
@@ -283,21 +283,32 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
             </div>
           )}
 
-          {/* Foto */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', width: 56, flexShrink: 0 }}>FOTO</span>
-            {article.photo ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={article.photo.dataUrl} alt="Artikel" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)' }} />
-                <span style={{ fontSize: 12, color: 'var(--text-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{article.photo.name}</span>
-                <button onClick={onRemovePhoto} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', fontSize: 18, padding: '0 4px', lineHeight: 1, flexShrink: 0 }}>×</button>
-              </div>
-            ) : (
-              <button onClick={onCapturePhoto} style={{ flex: 1, padding: '7px 10px', borderRadius: 7, fontSize: 13, border: '1.5px dashed var(--border)', background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <CameraIcon size={14} /> Foto aufnehmen (optional)
+          {/* Fotos */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', width: 56, flexShrink: 0, paddingTop: 8 }}>
+              {article.photos.length > 1 ? 'FOTOS' : 'FOTO'}
+            </span>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {article.photos.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {article.photos.map((photo) => (
+                    <div key={photo.id} style={{ position: 'relative' }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={photo.dataUrl} alt="Artikel" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', display: 'block' }} />
+                      <button
+                        onClick={() => onRemovePhoto(photo.id)}
+                        style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', border: 'none', background: 'var(--red)', color: '#fff', fontSize: 12, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button onClick={onCapturePhoto} style={{ padding: '7px 10px', borderRadius: 7, fontSize: 13, border: '1.5px dashed var(--border)', background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <CameraIcon size={14} /> {article.photos.length > 0 ? 'Weiteres Foto' : 'Foto aufnehmen (optional)'}
               </button>
-            )}
+            </div>
           </div>
         </div>
       )}

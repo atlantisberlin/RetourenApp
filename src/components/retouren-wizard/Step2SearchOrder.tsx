@@ -6,7 +6,7 @@ import type { Order } from '@/lib/types'
 type Photo = { id: string; dataUrl: string; name: string; type: string }
 
 interface Step2SearchOrderProps {
-  slipPhoto: Photo | null
+  slipPhotos: Photo[]
   searchQuery: string
   setSearchQuery: (value: string) => void
   searchResults: Order[]
@@ -15,12 +15,13 @@ interface Step2SearchOrderProps {
   selectedOrder: Order | null
   setSelectedOrder: (order: Order | null) => void
   onCapturePhoto: () => void
+  onRemovePhoto: (photoId: string) => void
   onSearchChange: (query: string) => void
   refreshActivity: () => void
 }
 
 export function Step2SearchOrder({
-  slipPhoto,
+  slipPhotos,
   searchQuery,
   setSearchQuery,
   searchResults,
@@ -29,6 +30,7 @@ export function Step2SearchOrder({
   selectedOrder,
   setSelectedOrder,
   onCapturePhoto,
+  onRemovePhoto,
   onSearchChange,
   refreshActivity,
 }: Step2SearchOrderProps) {
@@ -39,19 +41,39 @@ export function Step2SearchOrder({
         <p style={{ fontSize: 14, color: 'var(--text-3)', lineHeight: 1.5 }}>Retourenschein fotografieren und Bestellung suchen.</p>
       </div>
 
-      {/* Slip photo */}
-      <div onClick={onCapturePhoto} style={{ display: 'flex', alignItems: 'center', gap: 14, border: `1.5px ${slipPhoto ? 'solid var(--green-border)' : 'dashed var(--border)'}`, borderRadius: 12, background: slipPhoto ? 'var(--green-bg)' : 'var(--surface)', padding: '14px 16px', cursor: 'pointer', marginBottom: 20 }}>
-        {slipPhoto
-          // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={slipPhoto.dataUrl} alt="Retourenschein" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', flexShrink: 0 }} />
-          : <div style={{ width: 52, height: 52, borderRadius: 8, border: '1.5px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--text-muted)' }}><CameraIcon size={22} /></div>
-        }
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)', marginBottom: 2 }}>Retourenschein</div>
-          <div style={{ fontSize: 12, color: slipPhoto ? 'var(--green)' : 'var(--text-muted)' }}>
-            {slipPhoto ? `✓ ${slipPhoto.name}` : 'Lieferschein oder Retourenzettel fotografieren'}
+      {/* Slip photos */}
+      <div onClick={onCapturePhoto} style={{ border: `1.5px ${slipPhotos.length > 0 ? 'solid var(--green-border)' : 'dashed var(--border)'}`, borderRadius: 12, background: slipPhotos.length > 0 ? 'var(--green-bg)' : 'var(--surface)', padding: '14px 16px', cursor: 'pointer', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {slipPhotos.length === 0 && (
+            <div style={{ width: 52, height: 52, borderRadius: 8, border: '1.5px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--text-muted)' }}><CameraIcon size={22} /></div>
+          )}
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)', marginBottom: 2 }}>
+              {slipPhotos.length > 1 ? 'Retourenscheine' : 'Retourenschein'}
+            </div>
+            <div style={{ fontSize: 12, color: slipPhotos.length > 0 ? 'var(--green)' : 'var(--text-muted)' }}>
+              {slipPhotos.length > 0
+                ? `✓ ${slipPhotos.length} ${slipPhotos.length === 1 ? 'Foto' : 'Fotos'} · Weiteres hinzufügen +`
+                : 'Lieferschein oder Retourenzettel fotografieren'}
+            </div>
           </div>
         </div>
+        {slipPhotos.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+            {slipPhotos.map((photo) => (
+              <div key={photo.id} style={{ position: 'relative' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photo.dataUrl} alt="Retourenschein" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', display: 'block' }} />
+                <button
+                  onClick={(e) => { e.stopPropagation(); onRemovePhoto(photo.id) }}
+                  style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', border: 'none', background: 'var(--red)', color: '#fff', fontSize: 12, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Order search */}
