@@ -6,12 +6,14 @@ interface Step3SelectArticlesProps {
   articles: ArticleCapture[]
   onUpdateArticle: (idx: number, patch: Partial<ArticleCapture>) => void
   onCapturePhoto: (idx: number) => void
+  onRemovePhoto: (idx: number, photoId: string) => void
 }
 
 export function Step3SelectArticles({
   articles,
   onUpdateArticle,
   onCapturePhoto,
+  onRemovePhoto,
 }: Step3SelectArticlesProps) {
   return (
     <div>
@@ -37,14 +39,14 @@ export function Step3SelectArticles({
           <ArticleRow
             key={art.itemId}
             article={art}
-            onToggleReturned={(val) => onUpdateArticle(idx, val ? { returned: true } : { returned: false, returnedQuantity: null, condition: null, reason: null, resolution: null, replacementProduct: null, photo: null })}
+            onToggleReturned={(val) => onUpdateArticle(idx, val ? { returned: true } : { returned: false, returnedQuantity: null, condition: null, reason: null, resolution: null, replacementProduct: null, photos: [] })}
             onQuantity={(val) => onUpdateArticle(idx, { returnedQuantity: val })}
             onCondition={(val) => onUpdateArticle(idx, { condition: val })}
             onReason={(val) => onUpdateArticle(idx, { reason: val })}
             onResolution={(val) => onUpdateArticle(idx, { resolution: val })}
             onReplacementProduct={(val) => onUpdateArticle(idx, { replacementProduct: val })}
             onCapturePhoto={() => onCapturePhoto(idx)}
-            onRemovePhoto={() => onUpdateArticle(idx, { photo: null })}
+            onRemovePhoto={(photoId) => onRemovePhoto(idx, photoId)}
           />
         ))}
       </div>

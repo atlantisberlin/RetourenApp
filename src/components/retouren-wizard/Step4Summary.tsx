@@ -28,9 +28,9 @@ interface Step4SummaryProps {
   notes: string
   setNotes: (value: string) => void
   isDhlReturn: boolean | null
-  labelPhoto: Photo | null
-  exteriorPhoto: Photo | null
-  slipPhoto: Photo | null
+  labelPhotos: Photo[]
+  exteriorPhotos: Photo[]
+  slipPhotos: Photo[]
   operator: string | null
   error: string | null
   refreshActivity: () => void
@@ -43,9 +43,9 @@ export function Step4Summary({
   notes,
   setNotes,
   isDhlReturn,
-  labelPhoto,
-  exteriorPhoto,
-  slipPhoto,
+  labelPhotos,
+  exteriorPhotos,
+  slipPhotos,
   operator,
   error,
   refreshActivity,
@@ -63,7 +63,7 @@ export function Step4Summary({
           { label: 'TRACKING', val: <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{trackingNumber}</span> },
           { label: 'BESTELLUNG', val: `${selectedOrder.customerName} · #${selectedOrder.orderNumber}` },
           { label: 'RETOUREN', val: `${articles.filter(a => a.returned === true).length} von ${articles.length} Artikel` },
-          { label: 'FOTOS', val: `${[labelPhoto, exteriorPhoto, slipPhoto, ...articles.map(a => a.photo)].filter(Boolean).length} Aufnahmen` },
+          { label: 'FOTOS', val: `${labelPhotos.length + exteriorPhotos.length + slipPhotos.length + articles.reduce((sum, a) => sum + a.photos.length, 0)} Aufnahmen` },
           { label: 'MITARBEITER', val: operator },
         ] as { label: string; val: React.ReactNode }[]).map(({ label, val }, i, arr) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingBottom: i < arr.length - 1 ? 10 : 0, marginBottom: i < arr.length - 1 ? 10 : 0, borderBottom: i < arr.length - 1 ? '1px solid var(--border-2)' : 'none' }}>

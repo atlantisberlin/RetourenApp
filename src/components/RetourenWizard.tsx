@@ -31,11 +31,11 @@ export default function RetourenWizard() {
   // Step 1
   const [trackingNumber, setTrackingNumber] = useState('')
   const [isDhlReturn, setIsDhlReturn] = useState<boolean | null>(null)
-  const [labelPhoto, setLabelPhoto] = useState<Photo | null>(null)
-  const [exteriorPhoto, setExteriorPhoto] = useState<Photo | null>(null)
+  const [labelPhotos, setLabelPhotos] = useState<Photo[]>([])
+  const [exteriorPhotos, setExteriorPhotos] = useState<Photo[]>([])
 
   // Step 2
-  const [slipPhoto, setSlipPhoto] = useState<Photo | null>(null)
+  const [slipPhotos, setSlipPhotos] = useState<Photo[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Order[]>([])
   const [searchMode, setSearchMode] = useState('')
@@ -58,7 +58,7 @@ export default function RetourenWizard() {
   const fileRef = useRef<HTMLInputElement>(null)
   const photoTargetRef = useRef<'label' | 'exterior' | 'slip' | number>('label')
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingArticlesRef = useRef<Array<Omit<ArticleCapture, 'photo'>> | null>(null)
+  const pendingArticlesRef = useRef<Array<Omit<ArticleCapture, 'photos'>> | null>(null)
 
   // Load draft + operator on mount
   useEffect(() => {
@@ -98,7 +98,7 @@ export default function RetourenWizard() {
       reason: null as string | null,
       resolution: null as 'erstattung' | 'umtausch' | null,
       replacementProduct: null as ReplacementProduct | null,
-      photo: null as Photo | null,
+      photos: [] as Photo[],
       existingRetoure: item.existingRetoure ?? null,
       existingGutschrift: item.existingGutschrift ?? null,
     }))
@@ -124,7 +124,7 @@ export default function RetourenWizard() {
         isDhlReturn,
         selectedOrder,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        articles: articles.map(({ photo, ...rest }) => rest),
+        articles: articles.map(({ photos, ...rest }) => rest),
         notes,
         savedAt: new Date().toISOString(),
       }))
@@ -161,17 +161,31 @@ export default function RetourenWizard() {
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
     e.target.value = ''
     // Komprimieren, damit einzelne Uploads klein bleiben (kein 413 mehr)
-    const dataUrl = await compressImageToDataUrl(file)
-    const photo: Photo = { id: Date.now().toString(), dataUrl, name: file.name, type: file.type }
+    const newPhotos: Photo[] = await Promise.all(
+      files.map(async (file) => ({
+        id: `${Date.now()}-${Math.random()}`,
+        dataUrl: await compressImageToDataUrl(file),
+        name: file.name,
+        type: file.type,
+      }))
+    )
     const t = photoTargetRef.current
-    if (t === 'label') setLabelPhoto(photo)
-    else if (t === 'exterior') setExteriorPhoto(photo)
-    else if (t === 'slip') setSlipPhoto(photo)
-    else if (typeof t === 'number') setArticles(prev => prev.map((a, i) => i === t ? { ...a, photo } : a))
+    if (t === 'label') setLabelPhotos(prev => [...prev, ...newPhotos])
+    else if (t === 'exterior') setExteriorPhotos(prev => [...prev, ...newPhotos])
+    else if (t === 'slip') setSlipPhotos(prev => [...prev, ...newPhotos])
+    else if (typeof t === 'number') setArticles(prev => prev.map((a, i) => i === t ? { ...a, photos: [...a.photos, ...newPhotos] } : a))
+  }
+
+  const removePhoto = (target: 'label' | 'exterior' | 'slip' | number, id: string) => {
+    refreshActivity()
+    if (target === 'label') setLabelPhotos(prev => prev.filter(p => p.id !== id))
+    else if (target === 'exterior') setExteriorPhotos(prev => prev.filter(p => p.id !== id))
+    else if (target === 'slip') setSlipPhotos(prev => prev.filter(p => p.id !== id))
+    else setArticles(prev => prev.map((a, i) => i === target ? { ...a, photos: a.photos.filter(p => p.id !== id) } : a))
   }
 
   const handleSearchChange = (q: string) => {
@@ -233,11 +247,11 @@ export default function RetourenWizard() {
 
       // Fotos einzeln zur angelegten Asana-Aufgabe hochladen
       const photos = [
-        labelPhoto ? { dataUrl: labelPhoto.dataUrl, type: 'etikett' } : null,
-        exteriorPhoto ? { dataUrl: exteriorPhoto.dataUrl, type: 'paket' } : null,
-        slipPhoto ? { dataUrl: slipPhoto.dataUrl, type: 'schein' } : null,
-        ...articles.map(a => a.photo ? { dataUrl: a.photo.dataUrl, type: 'artikel' } : null),
-      ].filter((p): p is { dataUrl: string; type: string } => p !== null)
+        ...labelPhotos.map(p => ({ dataUrl: p.dataUrl, type: 'etikett' })),
+        ...exteriorPhotos.map(p => ({ dataUrl: p.dataUrl, type: 'paket' })),
+        ...slipPhotos.map(p => ({ dataUrl: p.dataUrl, type: 'schein' })),
+        ...articles.flatMap(a => a.photos.map(p => ({ dataUrl: p.dataUrl, type: 'artikel' }))),
+      ]
 
       if (photos.length > 0 && data.mode === 'live' && data.taskId) {
         setPhotoProgress({ done: 0, total: photos.length })
@@ -305,7 +319,7 @@ export default function RetourenWizard() {
         )}
         <button className="btn btn-primary btn-lg btn-full" style={{ maxWidth: 320, marginBottom: 12 }} onClick={() => {
           localStorage.removeItem(DRAFT_KEY)
-          setStep(1); setTrackingNumber(''); setIsDhlReturn(null); setLabelPhoto(null); setExteriorPhoto(null); setSlipPhoto(null)
+          setStep(1); setTrackingNumber(''); setIsDhlReturn(null); setLabelPhotos([]); setExteriorPhotos([]); setSlipPhotos([])
           setSearchQuery(''); setSearchResults([]); setSelectedOrder(null); setArticles([])
           setNotes(''); setSubmitted(false); setTaskId(null); setError(null); setPhotoWarning(null)
         }}>
@@ -320,7 +334,7 @@ export default function RetourenWizard() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--surface-2)' }}>
-      <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleFileChange} />
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple style={{ display: 'none' }} onChange={handleFileChange} />
 
       {/* HEADER */}
       <header className="page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -376,9 +390,10 @@ export default function RetourenWizard() {
             setTrackingNumber={setTrackingNumber}
             isDhlReturn={isDhlReturn}
             setIsDhlReturn={setIsDhlReturn}
-            labelPhoto={labelPhoto}
-            exteriorPhoto={exteriorPhoto}
+            labelPhotos={labelPhotos}
+            exteriorPhotos={exteriorPhotos}
             onCapturePhoto={(key) => capturePhoto(key)}
+            onRemovePhoto={removePhoto}
             refreshActivity={refreshActivity}
           />
         )}
@@ -386,7 +401,8 @@ export default function RetourenWizard() {
         {/* ── STEP 2: Slip Photo + Order Search ── */}
         {step === 2 && (
           <Step2SearchOrder
-            slipPhoto={slipPhoto}
+            slipPhotos={slipPhotos}
+            onRemovePhoto={(id) => removePhoto('slip', id)}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             searchResults={searchResults}
@@ -406,6 +422,7 @@ export default function RetourenWizard() {
             articles={articles}
             onUpdateArticle={updateArticle}
             onCapturePhoto={capturePhoto}
+            onRemovePhoto={removePhoto}
           />
         )}
 
@@ -418,9 +435,9 @@ export default function RetourenWizard() {
             notes={notes}
             setNotes={setNotes}
             isDhlReturn={isDhlReturn}
-            labelPhoto={labelPhoto}
-            exteriorPhoto={exteriorPhoto}
-            slipPhoto={slipPhoto}
+            labelPhotos={labelPhotos}
+            exteriorPhotos={exteriorPhotos}
+            slipPhotos={slipPhotos}
             operator={operator}
             error={error}
             refreshActivity={refreshActivity}
