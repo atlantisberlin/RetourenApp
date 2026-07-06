@@ -200,6 +200,7 @@ export default function RetourenWizard() {
     setError(null)
     refreshActivity()
     try {
+      // Exclude photos from submission to avoid 413 Payload Too Large
       const body: ReturnCapture = {
         orderId: selectedOrder.id,
         order: selectedOrder,
@@ -218,7 +219,7 @@ export default function RetourenWizard() {
         notes: notes.trim(),
         operatorName: operator ?? 'Unbekannt',
         dhlReturn: isDhlReturn === true,
-        photos: [labelPhoto, exteriorPhoto, slipPhoto, ...articles.map(a => a.photo)].filter((p): p is Photo => p !== null),
+        photos: undefined,
       }
       const response = await apiPost<{ mode: string; taskId: string }>('/api/submit', body)
       const resp = response as ApiResponse<{ mode: string; taskId: string }>
