@@ -55,7 +55,12 @@ export default function ZusammenfassungScreen({ orderId }: { orderId: string }) 
     setSubmitting(true)
     setError(null)
     try {
-      const response = await apiPost<{ mode: string; taskId: string }>('/api/submit', capture)
+      // Exclude photos from initial submission to avoid 413 Payload Too Large
+      const captureWithoutPhotos = {
+        ...capture,
+        photos: undefined,
+      }
+      const response = await apiPost<{ mode: string; taskId: string }>('/api/submit', captureWithoutPhotos)
       const resp = response as ApiResponse<{ mode: string; taskId: string }>
       if (!resp.success) {
         throw new Error(resp.error || 'Submission failed')
