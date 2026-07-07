@@ -35,8 +35,10 @@ export async function POST(request: Request) {
 
   const body: VersandBody = await request.json()
 
-  const asanaToken = process.env.ASANA_TOKEN
-  const asanaProject = process.env.ASANA_VERSAND_PROJECT_GID
+  // trim: Leerzeichen/Zeilenumbrüche aus kopierten Env-Werten lassen Asana
+  // sonst mit "Not a Long" abbrechen
+  const asanaToken = process.env.ASANA_TOKEN?.trim()
+  const asanaProject = process.env.ASANA_VERSAND_PROJECT_GID?.trim()
 
   if (!asanaToken || !asanaProject) {
     console.log('[demo] Asana Versand nicht konfiguriert — simuliere Einreichung:', body.trackingNumber)

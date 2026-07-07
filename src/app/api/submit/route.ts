@@ -55,13 +55,15 @@ export async function POST(request: Request) {
 
   const body: ReturnCapture = await request.json()
 
-  const asanaToken = process.env.ASANA_TOKEN
-  const asanaProject = process.env.ASANA_PROJECT_GID
-  const dhlTagGid = process.env.ASANA_DHL_TAG_GID
-  const amazonTagGid = process.env.ASANA_AMAZON_TAG_GID ?? '1205680122433653'
-  const ebayTagGid = process.env.ASANA_EBAY_TAG_GID ?? '1203021580329302'
-  const erstattungTagGid = process.env.ASANA_ERSTATTUNG_TAG_GID ?? '1216149276322551'
-  const umtauschTagGid = process.env.ASANA_UMTAUSCH_TAG_GID ?? '1208092258165924'
+  // trim: Leerzeichen/Zeilenumbrüche aus kopierten Env-Werten lassen Asana
+  // sonst mit "Not a Long" abbrechen
+  const asanaToken = process.env.ASANA_TOKEN?.trim()
+  const asanaProject = process.env.ASANA_PROJECT_GID?.trim()
+  const dhlTagGid = process.env.ASANA_DHL_TAG_GID?.trim()
+  const amazonTagGid = process.env.ASANA_AMAZON_TAG_GID?.trim() || '1205680122433653'
+  const ebayTagGid = process.env.ASANA_EBAY_TAG_GID?.trim() || '1203021580329302'
+  const erstattungTagGid = process.env.ASANA_ERSTATTUNG_TAG_GID?.trim() || '1216149276322551'
+  const umtauschTagGid = process.env.ASANA_UMTAUSCH_TAG_GID?.trim() || '1208092258165924'
 
   if (!asanaToken || !asanaProject) {
     console.log('[demo] Asana nicht konfiguriert — simuliere Einreichung:', body.orderId)

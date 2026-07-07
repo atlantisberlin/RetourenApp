@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     return apiJson(errorResponse(`Foto zu groß: ${sizeMB}MB > 4MB`), 413)
   }
 
-  const asanaToken = process.env.ASANA_TOKEN
+  const asanaToken = process.env.ASANA_TOKEN?.trim()
   if (!asanaToken) {
     console.log('[demo] Asana nicht konfiguriert — simuliere Foto-Upload für Task', taskGid)
     return apiJson(successResponse({ mode: 'demo' }))
