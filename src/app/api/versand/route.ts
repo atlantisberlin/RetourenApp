@@ -9,7 +9,10 @@ type VersandBody = {
   deliveryNote: string
   insuranceValue: string
   notes: string
-  photos: Photo[]
+  // Neue Clients senden keine Fotos mehr mit (413 Payload Too Large) —
+  // sie laden einzeln über /api/attach-photo hoch. Die Verarbeitung hier
+  // bleibt nur für alte, gecachte Clients erhalten.
+  photos?: Photo[]
 }
 
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024 // 10MB

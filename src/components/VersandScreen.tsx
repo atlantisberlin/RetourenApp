@@ -6,6 +6,8 @@ import { getOperator, refreshActivity } from '@/lib/operator'
 import { addToVersandHistory } from '@/lib/versandHistory'
 import { apiPost } from '@/lib/api-client'
 import type { ApiResponse } from '@/lib/api-response'
+import { compressImageToDataUrl } from '@/lib/compress-image'
+import { uploadPhotosToTask } from '@/lib/photo-upload'
 
 type Photo = { id: string; dataUrl: string; name: string; type: string }
 
@@ -26,19 +28,20 @@ export default function VersandScreen() {
   const [taskId, setTaskId] = useState<string | null>(null)
   const [mode, setMode] = useState<'live' | 'demo'>('demo')
   const [error, setError] = useState<string | null>(null)
+  const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null)
+  const [photoWarning, setPhotoWarning] = useState<string | null>(null)
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
     if (!files.length) return
+    // komprimiert, damit einzelne Uploads klein bleiben (kein 413)
     const newPhotos: Photo[] = await Promise.all(
-      files.map((file) =>
-        new Promise<Photo>((resolve) => {
-          const reader = new FileReader()
-          reader.onload = (ev) =>
-            resolve({ id: `${Date.now()}-${Math.random()}`, type: 'versand', dataUrl: ev.target?.result as string, name: file.name })
-          reader.readAsDataURL(file)
-        })
-      )
+      files.map(async (file) => ({
+        id: `${Date.now()}-${Math.random()}`,
+        type: 'versand',
+        dataUrl: await compressImageToDataUrl(file),
+        name: file.name,
+      }))
     )
     setPhotos((prev) => [...prev, ...newPhotos])
     if (fileRef.current) fileRef.current.value = ''
@@ -50,19 +53,33 @@ export default function VersandScreen() {
     setSubmitting(true)
     setError(null)
     try {
+      // Fotos werden NICHT mitgesendet (413 Payload Too Large), sondern
+      // nach dem Anlegen der Aufgabe einzeln über /api/attach-photo hochgeladen
       const response = await apiPost<{ mode: string; taskId: string }>('/api/versand', {
         carrier,
         trackingNumber: trackingNumber.trim(),
         deliveryNote: deliveryNote.trim(),
         insuranceValue: insuranceValue.trim(),
         notes: notes.trim(),
-        photos,
       })
       const resp = response as ApiResponse<{ mode: string; taskId: string }>
       if (!resp.success) {
         throw new Error(resp.error || 'Submission failed')
       }
       const data = resp.data
+
+      if (photos.length > 0 && data.mode === 'live' && data.taskId) {
+        setPhotoProgress({ done: 0, total: photos.length })
+        const uploadResult = await uploadPhotosToTask(data.taskId, photos, (done, total) => {
+          setPhotoProgress({ done, total })
+        })
+        setPhotoProgress(null)
+        if (uploadResult.failed > 0) {
+          console.error('Versand-Foto-Upload-Fehler:', uploadResult.errors)
+          setPhotoWarning(`${uploadResult.uploaded} von ${photos.length} Fotos hochgeladen. Fehlgeschlagen: ${uploadResult.errors.join('; ')}`)
+        }
+      }
+
       addToVersandHistory({
         carrier,
         trackingNumber: trackingNumber.trim(),
@@ -107,6 +124,11 @@ export default function VersandScreen() {
               ? 'Demo-Modus: Die Asana-Aufgabe würde jetzt angelegt.'
               : 'Die Asana-Aufgabe wurde im Projekt „Versand" angelegt.'}
           </p>
+          {photoWarning && (
+            <div style={{ fontSize: 13, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '10px 14px', marginBottom: 24, maxWidth: 360 }}>
+              ⚠️ {photoWarning}
+            </div>
+          )}
           {mode === 'demo' && (
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '8px 14px', marginBottom: 24 }}>
               Demo-Modus · {taskId}
@@ -118,7 +140,7 @@ export default function VersandScreen() {
             </div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 320 }}>
-            <button className="btn btn-primary btn-lg btn-full" onClick={() => { setSubmitted(false); setCarrier(''); setTrackingNumber(''); setDeliveryNote(''); setInsuranceValue(''); setNotes(''); setPhotos([]) }}>
+            <button className="btn btn-primary btn-lg btn-full" onClick={() => { setSubmitted(false); setCarrier(''); setTrackingNumber(''); setDeliveryNote(''); setInsuranceValue(''); setNotes(''); setPhotos([]); setPhotoWarning(null) }}>
               Neue Sendung dokumentieren
             </button>
             <button className="btn btn-secondary btn-full" style={{ display: 'flex' }} onClick={() => router.push('/')}>
@@ -298,7 +320,9 @@ export default function VersandScreen() {
               <circle cx="14" cy="12" r="3" fill="white" opacity="0.7"/>
             </svg>
           )}
-          {submitting ? 'Wird gesendet…' : 'An Asana senden'}
+          {submitting
+            ? photoProgress ? `Foto ${photoProgress.done}/${photoProgress.total} wird hochgeladen…` : 'Wird gesendet…'
+            : 'An Asana senden'}
         </button>
         <button className="btn btn-secondary btn-full" style={{ display: 'flex' }} onClick={() => router.push('/')}>
           Abbrechen
