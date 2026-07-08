@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { getOperator, refreshActivity } from '@/lib/operator'
 import { addToHistory } from '@/lib/history'
-import { apiPost } from '@/lib/api-client'
+import { apiPost, apiGet } from '@/lib/api-client'
 import type { ApiResponse } from '@/lib/api-response'
 import { compressImageToDataUrl } from '@/lib/compress-image'
 import { uploadPhotosToTask } from '@/lib/photo-upload'
@@ -196,8 +196,7 @@ export default function RetourenWizard() {
     searchTimerRef.current = setTimeout(async () => {
       setSearching(true)
       try {
-        const res = await fetch('/api/search?q=' + encodeURIComponent(q))
-        const data = await res.json()
+        const data = await apiGet<{ orders?: Order[]; mode?: string }>('/api/search?q=' + encodeURIComponent(q))
         setSearchResults(data.orders ?? [])
         setSearchMode(data.mode ?? '')
       } catch { /* ignore */ }

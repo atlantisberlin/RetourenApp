@@ -59,3 +59,32 @@ export async function apiDelete<T>(
     ...options,
   })
 }
+
+/**
+ * Helper for GET requests with token.
+ * Returns the raw parsed JSON — endpoints like /api/search respond with a
+ * bare object ({ orders, query, mode }), not the ApiResponse envelope.
+ */
+export async function apiGet<T>(
+  url: string,
+  options?: Omit<RequestInit, 'method' | 'body'>
+): Promise<T> {
+  const token = getSessionToken()
+
+  const headers = new Headers(options?.headers || {})
+
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+
+  const response = await fetch(url, { ...options, method: 'GET', headers })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({})) as Record<string, unknown>
+    throw new Error(
+      (typeof errorData.error === 'string' ? errorData.error : null) || `API error: ${response.status} ${response.statusText}`
+    )
+  }
+
+  return response.json() as Promise<T>
+}

@@ -6,6 +6,7 @@ import type { Order, SearchResult } from '@/lib/types'
 import { getOperator, clearOperator, refreshActivity } from '@/lib/operator'
 import UserSelectionScreen from './UserSelectionScreen'
 import { getHistory } from '@/lib/history'
+import { apiGet } from '@/lib/api-client'
 
 const HINTS = ['Bestellnr.', 'Kundennr.', 'Rechnungsnr.', 'Name']
 
@@ -42,9 +43,7 @@ export default function SearchScreen() {
       refreshActivity()
       startTransition(async () => {
         try {
-          const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`)
-          if (!res.ok) throw new Error(await res.text())
-          const data: SearchResult = await res.json()
+          const data = await apiGet<SearchResult>(`/api/search?q=${encodeURIComponent(q)}`)
           setResults(data.orders)
           setMode(data.mode)
           setHasSearched(true)
