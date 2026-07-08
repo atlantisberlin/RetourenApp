@@ -19,7 +19,7 @@ export const SessionCreateSchema = z.object({
 export const ReturnItemSchema = z.object({
   itemId: z.string().min(1, 'Item ID required'),
   returned: z.boolean(),
-  returnedQuantity: z.number().int().min(1, 'Quantity must be at least 1'),
+  returnedQuantity: z.number().int().min(0, 'Quantity must be zero or more'),
   condition: z.enum(['gut', 'beschaedigt', 'unvollstaendig', 'defekt'], {
     error: 'Invalid condition',
   }),
@@ -36,7 +36,7 @@ export const ReturnItemSchema = z.object({
       name: z.string().max(200),
       sku: z.string().max(50).optional(),
     })
-    .optional(),
+    .nullish(),
 })
 
 export const OrderItemSchema = z.object({
@@ -50,7 +50,7 @@ export const OrderItemSchema = z.object({
 })
 
 export const OrderSchema = z.object({
-  orderId: z.string().min(1),
+  id: z.string().min(1),
   orderNumber: z.string(),
   customerNumber: z.string(),
   customerName: z.string().max(200),
