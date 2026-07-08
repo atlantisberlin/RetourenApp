@@ -6,6 +6,7 @@ import Link from 'next/link'
 import type { ReturnCapture } from '@/lib/types'
 import { apiPost } from '@/lib/api-client'
 import type { ApiResponse } from '@/lib/api-response'
+import { uploadPhotosToTask } from '@/lib/photo-upload'
 import { StepIndicator } from './FotosScreen'
 import { addToHistory } from '@/lib/history'
 
@@ -43,6 +44,7 @@ export default function ZusammenfassungScreen({ orderId }: { orderId: string }) 
   const [taskId, setTaskId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<'live' | 'demo'>('demo')
+  const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null)
 
   useEffect(() => {
     if (!capture) {
@@ -55,12 +57,31 @@ export default function ZusammenfassungScreen({ orderId }: { orderId: string }) 
     setSubmitting(true)
     setError(null)
     try {
-      const response = await apiPost<{ mode: string; taskId: string }>('/api/submit', capture)
+      // Fotos werden NICHT mitgesendet (413 Payload Too Large), sondern
+      // nach dem Anlegen der Aufgabe einzeln über /api/attach-photo hochgeladen
+      const captureWithoutPhotos = {
+        ...capture,
+        photos: undefined,
+      }
+      const response = await apiPost<{ mode: string; taskId: string }>('/api/submit', captureWithoutPhotos)
       const resp = response as ApiResponse<{ mode: string; taskId: string }>
       if (!resp.success) {
         throw new Error(resp.error || 'Submission failed')
       }
       const data = resp.data
+
+      const photos = capture.photos ?? []
+      if (photos.length > 0 && data.mode === 'live' && data.taskId) {
+        setPhotoProgress({ done: 0, total: photos.length })
+        const uploadResult = await uploadPhotosToTask(data.taskId, photos, (done, total) => {
+          setPhotoProgress({ done, total })
+        })
+        setPhotoProgress(null)
+        if (uploadResult.failed > 0) {
+          console.error('Foto-Upload-Fehler:', uploadResult.errors)
+        }
+      }
+
       setTaskId(data.taskId)
       setMode((data.mode as 'live' | 'demo') || 'demo')
       setSubmitted(true)
@@ -227,7 +248,7 @@ export default function ZusammenfassungScreen({ orderId }: { orderId: string }) 
           {submitting ? (
             <>
               <Spinner />
-              Wird übermittelt…
+              {photoProgress ? `Foto ${photoProgress.done}/${photoProgress.total} wird hochgeladen…` : 'Wird übermittelt…'}
             </>
           ) : (
             <>

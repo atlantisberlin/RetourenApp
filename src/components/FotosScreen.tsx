@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { compressImageToDataUrl } from '@/lib/compress-image'
 
 type PhotoType = 'etikett' | 'schein' | 'paket' | 'artikel'
 type Photo = { id: string; type: PhotoType; dataUrl: string; name: string }
@@ -27,20 +28,13 @@ export default function FotosScreen({ orderId }: { orderId: string }) {
       if (!files.length || !activeSlot) return
       setUploading(true)
       const newPhotos: Photo[] = await Promise.all(
-        files.map(
-          (file) =>
-            new Promise<Photo>((resolve) => {
-              const reader = new FileReader()
-              reader.onload = (ev) =>
-                resolve({
-                  id: `${Date.now()}-${Math.random()}`,
-                  type: activeSlot,
-                  dataUrl: ev.target?.result as string,
-                  name: file.name,
-                })
-              reader.readAsDataURL(file)
-            })
-        )
+        files.map(async (file) => ({
+          id: `${Date.now()}-${Math.random()}`,
+          type: activeSlot,
+          // komprimiert, damit localStorage und Upload klein bleiben
+          dataUrl: await compressImageToDataUrl(file),
+          name: file.name,
+        }))
       )
       setPhotos((prev) => [...prev, ...newPhotos])
       setUploading(false)

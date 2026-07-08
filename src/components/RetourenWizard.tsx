@@ -6,6 +6,8 @@ import { getOperator, refreshActivity } from '@/lib/operator'
 import { addToHistory } from '@/lib/history'
 import { apiPost } from '@/lib/api-client'
 import type { ApiResponse } from '@/lib/api-response'
+import { compressImageToDataUrl } from '@/lib/compress-image'
+import { uploadPhotosToTask } from '@/lib/photo-upload'
 import type { Order, OrderItem, ReturnCapture, ReturnCondition, ReturnReason, ReturnResolution, ReplacementProduct } from '@/lib/types'
 import UserSelectionScreen from '@/components/UserSelectionScreen'
 import { type ArticleCapture } from '@/components/retouren-wizard/ArticleRow'
@@ -29,11 +31,11 @@ export default function RetourenWizard() {
   // Step 1
   const [trackingNumber, setTrackingNumber] = useState('')
   const [isDhlReturn, setIsDhlReturn] = useState<boolean | null>(null)
-  const [labelPhoto, setLabelPhoto] = useState<Photo | null>(null)
-  const [exteriorPhoto, setExteriorPhoto] = useState<Photo | null>(null)
+  const [labelPhotos, setLabelPhotos] = useState<Photo[]>([])
+  const [exteriorPhotos, setExteriorPhotos] = useState<Photo[]>([])
 
   // Step 2
-  const [slipPhoto, setSlipPhoto] = useState<Photo | null>(null)
+  const [slipPhotos, setSlipPhotos] = useState<Photo[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Order[]>([])
   const [searchMode, setSearchMode] = useState('')
@@ -50,11 +52,13 @@ export default function RetourenWizard() {
   const [taskId, setTaskId] = useState<string | null>(null)
   const [submitMode, setSubmitMode] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null)
+  const [photoWarning, setPhotoWarning] = useState<string | null>(null)
 
   const fileRef = useRef<HTMLInputElement>(null)
   const photoTargetRef = useRef<'label' | 'exterior' | 'slip' | number>('label')
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingArticlesRef = useRef<Array<Omit<ArticleCapture, 'photo'>> | null>(null)
+  const pendingArticlesRef = useRef<Array<Omit<ArticleCapture, 'photos'>> | null>(null)
 
   // Load draft + operator on mount
   useEffect(() => {
@@ -94,7 +98,7 @@ export default function RetourenWizard() {
       reason: null as string | null,
       resolution: null as 'erstattung' | 'umtausch' | null,
       replacementProduct: null as ReplacementProduct | null,
-      photo: null as Photo | null,
+      photos: [] as Photo[],
       existingRetoure: item.existingRetoure ?? null,
       existingGutschrift: item.existingGutschrift ?? null,
     }))
@@ -120,7 +124,7 @@ export default function RetourenWizard() {
         isDhlReturn,
         selectedOrder,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        articles: articles.map(({ photo, ...rest }) => rest),
+        articles: articles.map(({ photos, ...rest }) => rest),
         notes,
         savedAt: new Date().toISOString(),
       }))
@@ -156,20 +160,32 @@ export default function RetourenWizard() {
     fileRef.current?.click()
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const photo: Photo = { id: Date.now().toString(), dataUrl: ev.target?.result as string, name: file.name, type: file.type }
-      const t = photoTargetRef.current
-      if (t === 'label') setLabelPhoto(photo)
-      else if (t === 'exterior') setExteriorPhoto(photo)
-      else if (t === 'slip') setSlipPhoto(photo)
-      else if (typeof t === 'number') setArticles(prev => prev.map((a, i) => i === t ? { ...a, photo } : a))
-    }
-    reader.readAsDataURL(file)
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
     e.target.value = ''
+    // Komprimieren, damit einzelne Uploads klein bleiben (kein 413 mehr)
+    const newPhotos: Photo[] = await Promise.all(
+      files.map(async (file) => ({
+        id: `${Date.now()}-${Math.random()}`,
+        dataUrl: await compressImageToDataUrl(file),
+        name: file.name,
+        type: file.type,
+      }))
+    )
+    const t = photoTargetRef.current
+    if (t === 'label') setLabelPhotos(prev => [...prev, ...newPhotos])
+    else if (t === 'exterior') setExteriorPhotos(prev => [...prev, ...newPhotos])
+    else if (t === 'slip') setSlipPhotos(prev => [...prev, ...newPhotos])
+    else if (typeof t === 'number') setArticles(prev => prev.map((a, i) => i === t ? { ...a, photos: [...a.photos, ...newPhotos] } : a))
+  }
+
+  const removePhoto = (target: 'label' | 'exterior' | 'slip' | number, id: string) => {
+    refreshActivity()
+    if (target === 'label') setLabelPhotos(prev => prev.filter(p => p.id !== id))
+    else if (target === 'exterior') setExteriorPhotos(prev => prev.filter(p => p.id !== id))
+    else if (target === 'slip') setSlipPhotos(prev => prev.filter(p => p.id !== id))
+    else setArticles(prev => prev.map((a, i) => i === target ? { ...a, photos: a.photos.filter(p => p.id !== id) } : a))
   }
 
   const handleSearchChange = (q: string) => {
@@ -200,6 +216,8 @@ export default function RetourenWizard() {
     setError(null)
     refreshActivity()
     try {
+      // Fotos werden NICHT mitgesendet (413 Payload Too Large), sondern
+      // nach dem Anlegen der Aufgabe einzeln über /api/attach-photo hochgeladen
       const body: ReturnCapture = {
         orderId: selectedOrder.id,
         order: selectedOrder,
@@ -218,7 +236,7 @@ export default function RetourenWizard() {
         notes: notes.trim(),
         operatorName: operator ?? 'Unbekannt',
         dhlReturn: isDhlReturn === true,
-        photos: [labelPhoto, exteriorPhoto, slipPhoto, ...articles.map(a => a.photo)].filter((p): p is Photo => p !== null),
+        photos: undefined,
       }
       const response = await apiPost<{ mode: string; taskId: string }>('/api/submit', body)
       const resp = response as ApiResponse<{ mode: string; taskId: string }>
@@ -226,6 +244,27 @@ export default function RetourenWizard() {
         throw new Error(resp.error || 'Submission failed')
       }
       const data = resp.data
+
+      // Fotos einzeln zur angelegten Asana-Aufgabe hochladen
+      const photos = [
+        ...labelPhotos.map(p => ({ dataUrl: p.dataUrl, type: 'etikett' })),
+        ...exteriorPhotos.map(p => ({ dataUrl: p.dataUrl, type: 'paket' })),
+        ...slipPhotos.map(p => ({ dataUrl: p.dataUrl, type: 'schein' })),
+        ...articles.flatMap(a => a.photos.map(p => ({ dataUrl: p.dataUrl, type: 'artikel' }))),
+      ]
+
+      if (photos.length > 0 && data.mode === 'live' && data.taskId) {
+        setPhotoProgress({ done: 0, total: photos.length })
+        const uploadResult = await uploadPhotosToTask(data.taskId, photos, (done, total) => {
+          setPhotoProgress({ done, total })
+        })
+        setPhotoProgress(null)
+        if (uploadResult.failed > 0) {
+          console.error('Foto-Upload-Fehler:', uploadResult.errors)
+          setPhotoWarning(`${uploadResult.uploaded} von ${photos.length} Fotos hochgeladen. Fehlgeschlagen: ${uploadResult.errors.join('; ')}`)
+        }
+      }
+
       localStorage.removeItem(DRAFT_KEY)
       addToHistory({
         orderId: selectedOrder.id,
@@ -265,6 +304,11 @@ export default function RetourenWizard() {
         <p style={{ fontSize: 14, color: 'var(--text-3)', marginBottom: submitMode === 'demo' ? 8 : 32, textAlign: 'center' }}>
           Die Retoure wurde erfolgreich erfasst und an Asana übermittelt.
         </p>
+        {photoWarning && (
+          <div style={{ fontSize: 13, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '10px 14px', marginBottom: 24, maxWidth: 360, textAlign: 'center' }}>
+            ⚠️ {photoWarning}
+          </div>
+        )}
         {submitMode === 'demo' && (
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '8px 14px', marginBottom: 32 }}>
             Demo-Modus · {taskId}
@@ -275,9 +319,9 @@ export default function RetourenWizard() {
         )}
         <button className="btn btn-primary btn-lg btn-full" style={{ maxWidth: 320, marginBottom: 12 }} onClick={() => {
           localStorage.removeItem(DRAFT_KEY)
-          setStep(1); setTrackingNumber(''); setIsDhlReturn(null); setLabelPhoto(null); setExteriorPhoto(null); setSlipPhoto(null)
+          setStep(1); setTrackingNumber(''); setIsDhlReturn(null); setLabelPhotos([]); setExteriorPhotos([]); setSlipPhotos([])
           setSearchQuery(''); setSearchResults([]); setSelectedOrder(null); setArticles([])
-          setNotes(''); setSubmitted(false); setTaskId(null); setError(null)
+          setNotes(''); setSubmitted(false); setTaskId(null); setError(null); setPhotoWarning(null)
         }}>
           Neue Retoure
         </button>
@@ -290,7 +334,7 @@ export default function RetourenWizard() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--surface-2)' }}>
-      <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleFileChange} />
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple style={{ display: 'none' }} onChange={handleFileChange} />
 
       {/* HEADER */}
       <header className="page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -346,9 +390,10 @@ export default function RetourenWizard() {
             setTrackingNumber={setTrackingNumber}
             isDhlReturn={isDhlReturn}
             setIsDhlReturn={setIsDhlReturn}
-            labelPhoto={labelPhoto}
-            exteriorPhoto={exteriorPhoto}
+            labelPhotos={labelPhotos}
+            exteriorPhotos={exteriorPhotos}
             onCapturePhoto={(key) => capturePhoto(key)}
+            onRemovePhoto={removePhoto}
             refreshActivity={refreshActivity}
           />
         )}
@@ -356,7 +401,8 @@ export default function RetourenWizard() {
         {/* ── STEP 2: Slip Photo + Order Search ── */}
         {step === 2 && (
           <Step2SearchOrder
-            slipPhoto={slipPhoto}
+            slipPhotos={slipPhotos}
+            onRemovePhoto={(id) => removePhoto('slip', id)}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             searchResults={searchResults}
@@ -376,6 +422,7 @@ export default function RetourenWizard() {
             articles={articles}
             onUpdateArticle={updateArticle}
             onCapturePhoto={capturePhoto}
+            onRemovePhoto={removePhoto}
           />
         )}
 
@@ -388,9 +435,9 @@ export default function RetourenWizard() {
             notes={notes}
             setNotes={setNotes}
             isDhlReturn={isDhlReturn}
-            labelPhoto={labelPhoto}
-            exteriorPhoto={exteriorPhoto}
-            slipPhoto={slipPhoto}
+            labelPhotos={labelPhotos}
+            exteriorPhotos={exteriorPhotos}
+            slipPhotos={slipPhotos}
             operator={operator}
             error={error}
             refreshActivity={refreshActivity}
@@ -405,7 +452,9 @@ export default function RetourenWizard() {
         </button>
         <button className="btn btn-primary" onClick={handleNext} disabled={!isNextEnabled || submitting} style={{ flex: 1, opacity: !isNextEnabled ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           {step === 4
-            ? submitting ? <><ButtonSpinner /> Wird gesendet…</> : <><AsanaIcon /> An Asana senden</>
+            ? submitting
+              ? <><ButtonSpinner /> {photoProgress ? `Foto ${photoProgress.done}/${photoProgress.total} wird hochgeladen…` : 'Wird gesendet…'}</>
+              : <><AsanaIcon /> An Asana senden</>
             : 'Weiter'
           }
         </button>

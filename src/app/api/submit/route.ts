@@ -21,14 +21,19 @@ const reasonLabel: Record<string, string> = {
 
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024 // 10MB
 
-function escapeHtml(str: string): string {
+function escapeHtmlContent(str: string): string {
   return str
-    // strip characters invalid in XML 1.0 (control chars except tab/LF/CR)
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    // strip characters that Asana's XML parser rejects: C0 controls (except
+    // tab/LF/CR, e.g. GS1 barcode separators from scanners), DEL, C1 controls,
+    // unpaired surrogates and non-characters
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F￾￿]/g, '')
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '')
+    .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 export async function POST(request: Request) {
@@ -50,13 +55,15 @@ export async function POST(request: Request) {
     const rawBody = await request.json()
     const body = ReturnCaptureSchema.parse(rawBody)
 
-  const asanaToken = process.env.ASANA_TOKEN
-  const asanaProject = process.env.ASANA_PROJECT_GID
-  const dhlTagGid = process.env.ASANA_DHL_TAG_GID
-  const amazonTagGid = process.env.ASANA_AMAZON_TAG_GID ?? '1205680122433653'
-  const ebayTagGid = process.env.ASANA_EBAY_TAG_GID ?? '1203021580329302'
-  const erstattungTagGid = process.env.ASANA_ERSTATTUNG_TAG_GID ?? '1216149276322551'
-  const umtauschTagGid = process.env.ASANA_UMTAUSCH_TAG_GID ?? '1208092258165924'
+  // trim: Leerzeichen/Zeilenumbrüche aus kopierten Env-Werten lassen Asana
+  // sonst mit "Not a Long" abbrechen
+  const asanaToken = process.env.ASANA_TOKEN?.trim()
+  const asanaProject = process.env.ASANA_PROJECT_GID?.trim()
+  const dhlTagGid = process.env.ASANA_DHL_TAG_GID?.trim()
+  const amazonTagGid = process.env.ASANA_AMAZON_TAG_GID?.trim() || '1205680122433653'
+  const ebayTagGid = process.env.ASANA_EBAY_TAG_GID?.trim() || '1203021580329302'
+  const erstattungTagGid = process.env.ASANA_ERSTATTUNG_TAG_GID?.trim() || '1216149276322551'
+  const umtauschTagGid = process.env.ASANA_UMTAUSCH_TAG_GID?.trim() || '1208092258165924'
 
   if (!asanaToken || !asanaProject) {
     console.log('[demo] Asana nicht konfiguriert — simuliere Einreichung:', body.orderId)
@@ -74,38 +81,37 @@ export async function POST(request: Request) {
 
   const returnedItems = body.items.filter((i) => i.returned)
 
-  // ── html_notes ──────────────────────────────────────────────────────────────
+  // ── html_notes: HTML with <body> tag (required by Asana) ────────────────────
   const itemHtml = returnedItems.map((item) => {
     const orderItem = body.order.items.find((i) => i.id === item.itemId)
-    const name = escapeHtml(orderItem?.productName ?? item.itemId)
-    const cond = escapeHtml(conditionLabel[item.condition] ?? item.condition)
-    const reason = escapeHtml(reasonLabel[item.reason] ?? item.reason)
+    const name = escapeHtmlContent(orderItem?.productName ?? item.itemId)
+    const cond = escapeHtmlContent(conditionLabel[item.condition] ?? item.condition)
+    const reason = escapeHtmlContent(reasonLabel[item.reason] ?? item.reason)
     const resolution = item.resolution === 'erstattung' ? 'Erstattung' : 'Umtausch'
-    const notes = item.notes ? ` - <em>${escapeHtml(item.notes)}</em>` : ''
+    const notes = item.notes ? ` - ${escapeHtmlContent(item.notes)}` : ''
     const repl = item.replacementProduct
-      ? ` - Umtausch gegen: ${escapeHtml(item.replacementProduct.name)}${item.replacementProduct.sku ? ` (${escapeHtml(item.replacementProduct.sku)})` : ''}`
+      ? ` - Umtausch gegen: ${escapeHtmlContent(item.replacementProduct.name)}${item.replacementProduct.sku ? ` (${escapeHtmlContent(item.replacementProduct.sku)})` : ''}`
       : ''
-    return `<li><strong>${name}</strong> | ${item.returnedQuantity}x - Zustand: ${cond} - Grund: ${reason} - ${resolution}${repl}${notes}</li>`
-  }).join('\n')
+    return `<li>${name} | ${item.returnedQuantity}x - Zustand: ${cond} - Grund: ${reason} - ${resolution}${repl}${notes}</li>`
+  }).join('')
 
-  // Rechnungsnr: invoiceNr ist die echte Rechnungsnummer, invoiceNumber ist bs_nr (Bestellnr.)
   const rechnungsNr = body.order.invoiceNr
 
   const metaRows = [
-    `<li><strong>Bearbeitet von:</strong> ${escapeHtml(operatorName)}</li>`,
-    `<li><strong>Bestellnr.:</strong> ${escapeHtml(body.order.orderNumber)}</li>`,
-    `<li><strong>Kundennr.:</strong> ${escapeHtml(body.order.customerNumber)}</li>`,
-    `<li><strong>Kunde:</strong> ${escapeHtml(body.order.customerName)}</li>`,
-    rechnungsNr ? `<li><strong>Rechnungsnr.:</strong> ${escapeHtml(rechnungsNr)}</li>` : null,
-    body.order.deliveryNoteNumber ? `<li><strong>Lieferscheinnr.:</strong> ${escapeHtml(body.order.deliveryNoteNumber)}</li>` : null,
+    `<li>Bearbeitet von: ${escapeHtmlContent(operatorName)}</li>`,
+    `<li>Bestellnr.: ${escapeHtmlContent(body.order.orderNumber)}</li>`,
+    `<li>Kundennr.: ${escapeHtmlContent(body.order.customerNumber)}</li>`,
+    `<li>Kunde: ${escapeHtmlContent(body.order.customerName)}</li>`,
+    rechnungsNr ? `<li>Rechnungsnr.: ${escapeHtmlContent(rechnungsNr)}</li>` : null,
+    body.order.deliveryNoteNumber ? `<li>Lieferscheinnr.: ${escapeHtmlContent(body.order.deliveryNoteNumber)}</li>` : null,
     body.order.activeRetourenNr
-      ? `<li><strong>Retourennr.:</strong> ${escapeHtml(body.order.activeRetourenNr)}</li>`
-      : `<li><strong>Retourennr.:</strong> ___________ <em>(bitte nachtragen)</em></li>`,
-    body.trackingNumber ? `<li><strong>Tracking:</strong> ${escapeHtml(body.trackingNumber)}</li>` : null,
-  ].filter(Boolean).join('\n')
+      ? `<li>Retourennr.: ${escapeHtmlContent(body.order.activeRetourenNr)}</li>`
+      : `<li>Retourennr.: ___________ (bitte nachtragen)</li>`,
+    body.trackingNumber ? `<li>Tracking: ${escapeHtmlContent(body.trackingNumber)}</li>` : null,
+  ].filter(Boolean).join('')
 
   const bemerkungHtml = body.notes
-    ? `<h2>Bemerkungen</h2><p>${escapeHtml(body.notes)}</p>`
+    ? `<p>Bemerkungen: ${escapeHtmlContent(body.notes)}</p>`
     : ''
 
   const html_notes = `<body><h2>Auftrag</h2><ul>${metaRows}</ul><h2>Zurückgekommene Positionen</h2><ul>${itemHtml}</ul>${bemerkungHtml}</body>`
@@ -113,6 +119,7 @@ export async function POST(request: Request) {
   console.log('[Asana] Task name:', title)
   console.log('[Asana] Photos count:', body.photos?.length ?? 0)
   console.log('[Asana] html_notes length:', html_notes.length)
+  console.log('[Asana] Photos included in payload:', !!body.photos)
   console.log('[Asana] Tags:', [
     ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
     ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
@@ -121,35 +128,44 @@ export async function POST(request: Request) {
     ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
   ])
 
-  const taskPayload = {
-    data: {
-      name: title,
-      html_notes,
-      projects: [asanaProject],
-      tags: [
-        ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
-        ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
-        ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
-        ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
-        ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
-      ],
-    },
+  const tags = [
+    ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
+    ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
+    ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
+    ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
+    ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
+  ]
+
+  async function createTask(payload: object): Promise<Response> {
+    return fetch('https://app.asana.com/api/1.0/tasks', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${asanaToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
   }
 
-  const res = await fetch('https://app.asana.com/api/1.0/tasks', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${asanaToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(taskPayload),
-  })
+  let res = await createTask({ data: { name: title, html_notes, projects: [asanaProject], tags } })
+
+  // Fallback: wenn Asana das HTML ablehnt (400), stattdessen als Plain-Text
+  // senden, damit die Retoure nie an der Formatierung scheitert
+  if (res.status === 400) {
+    const err = await res.text()
+    console.error('Asana lehnte html_notes ab (400), Fallback auf Plain-Text. Error:', err)
+    console.error('html_notes war:', JSON.stringify(html_notes))
+    const plainNotes = html_notes
+      .replace(/<\/(h2|li|p)>/g, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+    res = await createTask({ data: { name: title, notes: plainNotes, projects: [asanaProject], tags } })
+  }
 
   if (!res.ok) {
     const err = await res.text()
     console.error('Asana API error:', res.status)
     console.error('Asana error body:', err)
-    console.error('Task payload size:', JSON.stringify(taskPayload).length, 'bytes')
     return apiJson(errorResponse('Asana submission failed'), 502)
   }
 

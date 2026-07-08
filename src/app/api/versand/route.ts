@@ -3,8 +3,6 @@ import { apiJson, successResponse, errorResponse } from '@/lib/api-response'
 import { VersandSchema } from '@/lib/schemas'
 import { z } from 'zod'
 
-type Photo = { id: string; dataUrl: string; name: string; type: string }
-
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024 // 10MB
 
 export async function POST(request: Request) {
@@ -26,8 +24,10 @@ export async function POST(request: Request) {
     const rawBody = await request.json()
     const body = VersandSchema.parse(rawBody)
 
-  const asanaToken = process.env.ASANA_TOKEN
-  const asanaProject = process.env.ASANA_VERSAND_PROJECT_GID
+  // trim: Leerzeichen/Zeilenumbrüche aus kopierten Env-Werten lassen Asana
+  // sonst mit "Not a Long" abbrechen
+  const asanaToken = process.env.ASANA_TOKEN?.trim()
+  const asanaProject = process.env.ASANA_VERSAND_PROJECT_GID?.trim()
 
   if (!asanaToken || !asanaProject) {
     console.log('[demo] Asana Versand nicht konfiguriert — simuliere Einreichung:', body.trackingNumber)
