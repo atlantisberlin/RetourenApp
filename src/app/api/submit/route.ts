@@ -1,6 +1,6 @@
 import { verifySessionToken, extractSessionToken } from '@/lib/session'
 import { apiJson, successResponse, errorResponse } from '@/lib/api-response'
-import { ReturnCaptureSchema, type ReturnCapture } from '@/lib/schemas'
+import { ReturnCaptureSchema } from '@/lib/schemas'
 import { z } from 'zod'
 
 const conditionLabel: Record<string, string> = {

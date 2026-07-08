@@ -21,14 +21,14 @@ export const ReturnItemSchema = z.object({
   returned: z.boolean(),
   returnedQuantity: z.number().int().min(1, 'Quantity must be at least 1'),
   condition: z.enum(['gut', 'beschaedigt', 'unvollstaendig', 'defekt'], {
-    errorMap: () => ({ message: 'Invalid condition' }),
+    error: 'Invalid condition',
   }),
   reason: z.enum(
     ['gefaellt_nicht', 'falsch_geliefert', 'defekt_bei_ankunft', 'groesse_passt_nicht', 'beschaedigt_bei_lieferung', 'sonstiges'],
-    { errorMap: () => ({ message: 'Invalid reason' }) }
+    { error: 'Invalid reason' }
   ),
   resolution: z.enum(['erstattung', 'umtausch'], {
-    errorMap: () => ({ message: 'Invalid resolution' }),
+    error: 'Invalid resolution',
   }),
   notes: z.string().max(500, 'Notes too long').optional(),
   replacementProduct: z
