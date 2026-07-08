@@ -144,6 +144,29 @@ export default function OrderDetailScreen({
           </div>
         )}
 
+        {/* Not-yet-invoiced notice */}
+        {order.notInvoiced && (
+          <div style={{
+            marginBottom: 16,
+            padding: '12px 16px',
+            background: '#fff7ed',
+            border: '1px solid #fed7aa',
+            borderRadius: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0 }}>
+              <path d="M9 2L1.5 15.5h15L9 2z" stroke="#ea580c" strokeWidth="1.5" strokeLinejoin="round"/>
+              <path d="M9 7v4" stroke="#ea580c" strokeWidth="1.5" strokeLinecap="round"/>
+              <circle cx="9" cy="13" r="0.75" fill="#ea580c"/>
+            </svg>
+            <span style={{ fontSize: 13, color: '#9a3412' }}>
+              Zu dieser Bestellung liegt noch keine Rechnung vor — die Positionen stammen aus der Bestellung. Preise können sich noch ändern.
+            </span>
+          </div>
+        )}
+
         {/* Articles */}
         <div className="section-title">
           {order.items.length} {order.items.length === 1 ? 'Position' : 'Positionen'}

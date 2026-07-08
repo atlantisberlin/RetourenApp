@@ -12,6 +12,10 @@ export type Order = {
   invoiceDateWarning?: boolean
   status: string
   items: OrderItem[]
+  // true, wenn die Artikel aus den Bestellpositionen (atlos_orders_products)
+  // stammen, weil in BigQuery noch keine Rechnung (invoice_products) vorliegt.
+  // Preise/Retouren-Verknüpfungen sind dann noch nicht final.
+  notInvoiced?: boolean
   source?: string
   partnershop?: string
   externOrderId?: string

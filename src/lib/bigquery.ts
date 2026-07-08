@@ -4,6 +4,7 @@ import type { Order, OrderItem } from './types'
 const PROJECT = process.env.BQ_PROJECT ?? 'zentrallager'
 const DATASET = process.env.BQ_DATASET ?? 'ATLOS'
 const T_ORDERS = process.env.BQ_TABLE_ORDERS ?? 'atlos_orders'
+const T_ORDERS_PRODUCTS = process.env.BQ_TABLE_ORDERS_PRODUCTS ?? 'atlos_orders_products'
 const T_CUSTOMERS = process.env.BQ_TABLE_CUSTOMERS ?? 'atlos_customers'
 const T_PRODUCTS = process.env.BQ_TABLE_PRODUCTS ?? 'atlos_products'
 const T_INVOICE = process.env.BQ_TABLE_INVOICE ?? 'atlos_invoice'
@@ -101,7 +102,7 @@ function mapItem(item: BQItemRow, idx: number): OrderItem {
   }
 }
 
-function mapOrder(row: BQOrderRow, items: BQItemRow[]): Order {
+function mapOrder(row: BQOrderRow, items: BQItemRow[], notInvoiced = false): Order {
   let invoiceDate: string | undefined
   let invoiceDateWarning: boolean | undefined
   if (row.orders_rechnungsdatum) {
@@ -130,6 +131,7 @@ function mapOrder(row: BQOrderRow, items: BQItemRow[]): Order {
     source: 'ATLOS',
     partnershop: isAmazon(row) ? 'amazon' : isEbay(row) ? 'ebay' : (row.partnershop ?? undefined),
     externOrderId: row.extern_orders_id ?? undefined,
+    notInvoiced: notInvoiced || undefined,
     items: items.map((item, i) => mapItem(item, i)),
   }
 }
@@ -209,6 +211,38 @@ async function fetchItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]
   return items
 }
 
+// Fallback: order line items from atlos_orders_products.
+// Used when an order has no invoice_products in BigQuery yet (invoice not
+// created/synced), so operators can still capture a return before the order
+// is invoiced. Retoure/Gutschrift columns stay null — those only exist once
+// the invoice has been generated.
+async function fetchOrderProductItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]> {
+  if (orderIds.length === 0) return []
+  const placeholders = orderIds.map((_, i) => `@id${i}`).join(',')
+  const params: Record<string, string> = {}
+  orderIds.forEach((id, i) => { params[`id${i}`] = id })
+
+  const sql = `
+    SELECT
+      op.orders_products_id AS invoice_products_id,
+      op.orders_id,
+      op.products_id,
+      op.products_name,
+      op.products_model,
+      op.final_price,
+      op.products_quantity,
+      p.products_image
+    FROM ${table(T_ORDERS_PRODUCTS)} op
+    LEFT JOIN (
+      SELECT products_id, ANY_VALUE(products_image) AS products_image
+      FROM ${table(T_PRODUCTS)} GROUP BY products_id
+    ) p ON op.products_id = p.products_id
+    WHERE op.orders_id IN (${placeholders})
+  `
+  const [rows] = await bq.query({ query: sql, params })
+  return rows as BQItemRow[]
+}
+
 export async function searchOrders(query: string): Promise<Order[]> {
   const bq = getClient()
   if (!bq) return []
@@ -280,9 +314,28 @@ export async function searchOrders(query: string): Promise<Order[]> {
     itemsByOrder[oid].push(item)
   }
 
-  return (rows as BQOrderRow[]).map((r) =>
-    mapOrder(r, itemsByOrder[String(r.orders_id)] ?? [])
-  )
+  // Fallback: Bestellungen ohne Rechnungspositionen (Rechnung noch nicht in BQ)
+  // aus atlos_orders_products befüllen, damit die Retoure trotzdem erfassbar ist.
+  const notInvoiced = new Set<string>()
+  const missing = orderIds.filter((oid) => !itemsByOrder[oid]?.length)
+  if (missing.length > 0) {
+    try {
+      const fallbackRows = await fetchOrderProductItems(bq, missing)
+      for (const item of fallbackRows as (BQItemRow & { orders_id: string | number })[]) {
+        const oid = String(item.orders_id)
+        if (!itemsByOrder[oid]) itemsByOrder[oid] = []
+        itemsByOrder[oid].push(item)
+        notInvoiced.add(oid)
+      }
+    } catch (e) {
+      console.error('orders_products fallback failed (non-fatal):', e)
+    }
+  }
+
+  return (rows as BQOrderRow[]).map((r) => {
+    const oid = String(r.orders_id)
+    return mapOrder(r, itemsByOrder[oid] ?? [], notInvoiced.has(oid))
+  })
 }
 
 export async function getOrder(id: string): Promise<Order | null> {
@@ -320,8 +373,18 @@ export async function getOrder(id: string): Promise<Order | null> {
   const [rows] = await bq.query({ query: sql, params: { id } })
   if (!rows || rows.length === 0) return null
 
-  const itemRows = await fetchItems(bq, [id])
-  return mapOrder((rows as BQOrderRow[])[0], itemRows)
+  let itemRows = await fetchItems(bq, [id])
+  let notInvoiced = false
+  // Fallback auf Bestellpositionen, wenn (noch) keine Rechnung in BQ vorliegt
+  if (itemRows.length === 0) {
+    try {
+      itemRows = await fetchOrderProductItems(bq, [id])
+      notInvoiced = itemRows.length > 0
+    } catch (e) {
+      console.error('orders_products fallback failed (non-fatal):', e)
+    }
+  }
+  return mapOrder((rows as BQOrderRow[])[0], itemRows, notInvoiced)
 }
 
 export async function getOrderByRetourenNr(retourenNr: string): Promise<Order | null> {
