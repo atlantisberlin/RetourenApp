@@ -43,10 +43,12 @@ export const OrderItemSchema = z.object({
   id: z.string(),
   productName: z.string(),
   productId: z.string(),
-  sku: z.string().optional(),
+  sku: z.string().nullish(),
   quantity: z.number().int().min(1),
   price: z.number().min(0),
-  imageUrl: z.string().url().optional(),
+  // BigQuery liefert für fehlende Felder null; imageUrl kann zudem
+  // Dateinamen mit Leer-/Sonderzeichen enthalten, daher kein strenges url()
+  imageUrl: z.string().nullish(),
 })
 
 export const OrderSchema = z.object({
@@ -54,13 +56,15 @@ export const OrderSchema = z.object({
   orderNumber: z.string(),
   customerNumber: z.string(),
   customerName: z.string().max(200),
-  customerEmail: z.string().email().optional(),
+  // leerer String, wenn im Shop keine E-Mail hinterlegt ist; null aus BQ
+  customerEmail: z.union([z.string().email(), z.literal('')]).nullish(),
   items: z.array(OrderItemSchema).min(1, 'Order must have items'),
-  source: z.string().optional(),
-  partnershop: z.string().optional(),
-  activeRetourenNr: z.string().optional(),
-  invoiceNr: z.string().optional(),
-  deliveryNoteNumber: z.string().optional(),
+  source: z.string().nullish(),
+  partnershop: z.string().nullish(),
+  activeRetourenNr: z.string().nullish(),
+  // null, solange (noch) keine Rechnung in BigQuery vorliegt
+  invoiceNr: z.string().nullish(),
+  deliveryNoteNumber: z.string().nullish(),
 })
 
 export const PhotoSchema = z.object({
