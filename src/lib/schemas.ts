@@ -8,6 +8,13 @@ export const SearchQuerySchema = z.object({
     .trim(),
 })
 
+export const DeviceCodeSchema = z.object({
+  code: z
+    .string()
+    .min(1, 'Code required')
+    .max(100, 'Code too long'),
+})
+
 export const SessionCreateSchema = z.object({
   operatorName: z
     .string()
@@ -101,6 +108,10 @@ export const VersandSchema = z.object({
 
 export const OrderDetailQuerySchema = z.object({
   id: z.string().min(1, 'Order ID required').max(100),
+})
+
+export const ProductSearchQuerySchema = z.object({
+  q: z.string().max(100, 'Search query too long (max 100 chars)'),
 })
 
 export type SearchQuery = z.infer<typeof SearchQuerySchema>

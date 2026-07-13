@@ -1,6 +1,8 @@
 import { verifySessionToken, extractSessionToken } from '@/lib/session'
 import { apiJson, successResponse, errorResponse } from '@/lib/api-response'
 import { ReturnCaptureSchema } from '@/lib/schemas'
+import { auditLog } from '@/lib/audit-log'
+import { getClientIp } from '@/lib/rate-limit'
 import { z } from 'zod'
 
 const conditionLabel: Record<string, string> = {
@@ -37,6 +39,7 @@ function escapeHtmlContent(str: string): string {
 }
 
 export async function POST(request: Request) {
+  const ip = getClientIp(request)
   try {
     const token = extractSessionToken(
       request.headers.get('authorization') ?? undefined,
@@ -44,11 +47,13 @@ export async function POST(request: Request) {
     )
 
     if (!token) {
+      auditLog({ event: 'submit', status: 'failure', ip, reason: 'no_token' })
       return apiJson(errorResponse('Unauthorized: No session token'), 401)
     }
 
     const operatorName = await verifySessionToken(token)
     if (!operatorName) {
+      auditLog({ event: 'submit', status: 'failure', ip, reason: 'invalid_token' })
       return apiJson(errorResponse('Unauthorized: Invalid or expired session'), 401)
     }
 
@@ -68,6 +73,7 @@ export async function POST(request: Request) {
   if (!asanaToken || !asanaProject) {
     console.log('[demo] Asana nicht konfiguriert — simuliere Einreichung:', body.orderId)
     await new Promise((r) => setTimeout(r, 800))
+    auditLog({ event: 'submit', status: 'success', operator: operatorName, ip, orderId: body.orderId, mode: 'demo' })
     return apiJson(successResponse({ mode: 'demo', taskId: 'DEMO-' + Date.now() }))
   }
 
@@ -251,15 +257,18 @@ export async function POST(request: Request) {
       console.warn('Photo upload errors:', photoErrors)
     }
 
+    auditLog({ event: 'submit', status: 'success', operator: operatorName, ip, orderId: body.orderId, mode: 'live', taskId: taskGid })
     return apiJson(successResponse({ mode: 'live', taskId: taskGid }))
   } catch (error) {
     if (error instanceof z.ZodError) {
+      auditLog({ event: 'submit', status: 'failure', ip, reason: 'invalid_input' })
       return apiJson(
         errorResponse(`Invalid input: ${error.issues[0]?.message || 'Invalid input'}`),
         400
       )
     }
     console.error('Submit error:', error)
+    auditLog({ event: 'submit', status: 'failure', ip, reason: 'server_error' })
     return apiJson(errorResponse('Submission failed'), 500)
   }
 }

@@ -11,7 +11,11 @@
 **Critical Issues Found:** 7  
 **High Priority Issues:** 6  
 **Total Estimated Effort:** 3-4 weeks  
-**Current Progress:** 29% (2/7 Critical Fixed)
+**Current Progress:** All CRITICAL (7/7) and HIGH (4/4, see `SECURITY_CHECKLIST.md`
+for the exact breakdown) items resolved as of 2026-07-13. Several resolved via
+architecture/documented decisions rather than new packages — see items 9
+(CSRF) and 13 (CORS) below. Remaining: MEDIUM items (dependency scanning,
+secrets rotation, security testing, docs).
 
 ---
 
@@ -20,16 +24,31 @@
 ### ✅ COMPLETED
 - [x] **Security Issue #1:** Protect `/api/debug` endpoint with authentication
 - [x] **Security Issue #2:** Protect `/api/search` endpoint with authentication
+- [x] **Security Issue #3:** Require + validate strength of `JWT_SECRET` in production
 - [x] **Security Issue #5:** Remove verbose error messages
+- [x] **Security Issue #7:** Clean up `.env.example` GCP credentials handling
+- [x] **Security Issue #4 (Input Validation):** Zod schemas cover search, submit,
+      versand, auth/session, search-products
+- [x] **Security Issue #6 (Security Headers):** CSP, X-Frame-Options, nosniff,
+      HSTS (prod), X-XSS-Protection, Referrer-Policy added in `next.config.ts`
+- [x] **No-Auth Route Check:** `/api/order/[id]` was dead code (unused, no auth
+      check) — deleted rather than fixed, since the actual order page fetches
+      via a Server Component (`getOrder()` directly), never through this API
+      route. `/api/search-products` was live but missing auth — fixed.
+- [x] **Security Issue #8 (CSRF):** Analyzed and resolved via existing
+      architecture, no token system built — see item 9 below for reasoning.
 
 ### ⏳ IN PROGRESS / TO DO
 
-#### 1. **Weak JWT Secret** (15 min)
-- [ ] Make `JWT_SECRET` environment variable REQUIRED
-- [ ] Throw error in production if not set
-- [ ] Document in README.md
-- [ ] Generate strong default for dev: `crypto.randomBytes(32).toString('hex')`
-- **Files to update:** `src/lib/session.ts`, `.env.example`
+#### 1. **Weak JWT Secret** (15 min) — ✅ DONE (2026-07-13)
+- [x] Make `JWT_SECRET` environment variable REQUIRED (throws in production if unset)
+- [x] Throw error in production if not set
+- [x] Also throw in production if set but shorter than 32 chars (was previously
+      accepted — "weak" secret, not just "missing" secret)
+- [ ] Document in README.md (not done in this pass)
+- [ ] Generate strong default for dev — dev fallback stays a static warned string,
+      not auto-generated; acceptable since it only applies outside production
+- **Files updated:** `src/lib/session.ts`
 - **Blocking:** No other security features work without this
 
 ```bash
@@ -43,75 +62,78 @@ JWT_SECRET=dev-only-key npm run dev
 
 ---
 
-#### 2. **Implement Input Validation (Zod)**
-**Estimated Time:** 3-4 hours  
-**Package:** `zod@^3.22.0`
+#### 2. **Implement Input Validation (Zod)** — ✅ DONE
+**Package:** `zod@^4.4.3` (already in `package.json`)
 
 **Step 1:** Install & Setup
-- [ ] `npm install zod`
-- [ ] Create `src/lib/schemas.ts` with all validation schemas
-- [ ] Define schemas for:
-  - [ ] `SearchQuerySchema` - query string max 100 chars
-  - [ ] `SessionCreateSchema` - operator name validation
-  - [ ] `ReturnCaptureSchema` - complex return data
-  - [ ] `VersandSchema` - shipping data
-  - [ ] `OrderSearchSchema` - order ID validation
+- [x] `zod` installed
+- [x] `src/lib/schemas.ts` with all validation schemas
+- [x] Schemas defined: `SearchQuerySchema`, `SessionCreateSchema`,
+      `ReturnCaptureSchema`, `VersandSchema`, `OrderDetailQuerySchema`,
+      `ProductSearchQuerySchema` (added 2026-07-13), `DeviceCodeSchema`
+      (added 2026-07-13 for the device-gate login)
 
 **Step 2:** Integrate into APIs
-- [ ] Add Zod validation to `/api/search/route.ts`
-- [ ] Add Zod validation to `/api/auth/session/route.ts`
-- [ ] Add Zod validation to `/api/submit/route.ts`
-- [ ] Add Zod validation to `/api/versand/route.ts`
-- [ ] Add Zod validation to `/api/order/[id]/route.ts`
+- [x] `/api/search/route.ts`
+- [x] `/api/auth/session/route.ts`
+- [x] `/api/submit/route.ts`
+- [x] `/api/versand/route.ts`
+- [x] `/api/search-products/route.ts` (added 2026-07-13, was previously unvalidated + unauthenticated)
+- `/api/order/[id]/route.ts` — n/a, route deleted (dead code, see item 6 below)
 
-**Step 3:** Test
-- [ ] Manual test: Invalid JSON payloads return 400
-- [ ] Manual test: Oversized inputs rejected
-- [ ] Manual test: Valid inputs pass through
-
-**Files to update:**
-- `src/lib/schemas.ts` (new)
+**Files updated:**
+- `src/lib/schemas.ts`
 - `src/app/api/search/route.ts`
 - `src/app/api/auth/session/route.ts`
 - `src/app/api/submit/route.ts`
 - `src/app/api/versand/route.ts`
+- `src/app/api/search-products/route.ts`
 
 ---
 
-#### 3. **Add Security Headers to Next.js Config**
-**Estimated Time:** 1 hour  
+#### 3. **Add Security Headers to Next.js Config** — ✅ DONE (2026-07-13)
 **No new packages needed**
 
-- [ ] Update `next.config.ts` with `headers()` function
-- [ ] Add CSP (Content-Security-Policy)
-- [ ] Add X-Frame-Options: DENY
-- [ ] Add X-Content-Type-Options: nosniff
-- [ ] Add Strict-Transport-Security (HSTS)
-- [ ] Add X-XSS-Protection
-- [ ] Add Referrer-Policy
+- [x] Update `next.config.ts` with `headers()` function
+- [x] Add CSP (Content-Security-Policy) — `style-src 'unsafe-inline'` needed
+      because the app uses React inline styles throughout; `script-src`
+      relaxes to `unsafe-eval`/`unsafe-inline` only in dev (Fast Refresh)
+- [x] Add X-Frame-Options: DENY
+- [x] Add X-Content-Type-Options: nosniff
+- [x] Add Strict-Transport-Security (HSTS) — production only (sent over
+      plain HTTP it's a no-op per spec, but scoped anyway to avoid any
+      confusion during local dev)
+- [x] Add X-XSS-Protection — set to `0` (disabled), not `1; mode=block`;
+      the legacy XSS-auditor mode had its own exploitable bugs and is
+      removed in modern browsers, OWASP now recommends disabling it and
+      relying on CSP instead
+- [x] Add Referrer-Policy (`strict-origin-when-cross-origin`)
 
-**Verification:**
+**Verification (once a Node environment is available to run `npm run dev`/`next start`):**
 ```bash
-curl -I https://app.local/api/search
-# Should show Security Headers
+curl -I http://localhost:3000/
+# Should show Content-Security-Policy, X-Frame-Options, etc.
 ```
 
 ---
 
-#### 4. **Fix GCP Credentials Handling**
+#### 4. **Fix GCP Credentials Handling** — ✅ mostly DONE (2026-07-13)
 **Estimated Time:** 30 min  
 **Security Risk:** CRITICAL - Credentials in Environment Variables
 
-- [ ] Update `.env.example`: Remove `GCP_SERVICE_ACCOUNT_JSON` (Plain Text)
-- [ ] Document: Use only `GOOGLE_APPLICATION_CREDENTIALS` (file path)
-- [ ] OR: Use Application Default Credentials (ADC)
-- [ ] Add warning comment in code
-- [ ] Document in README.md
+- [x] Update `.env.example`: `GOOGLE_APPLICATION_CREDENTIALS` documented as the
+      recommended default; `GCP_SERVICE_ACCOUNT_JSON` kept only as a clearly
+      marked, commented-out fallback for filesystem-less deploys (e.g. Vercel),
+      with explicit warnings against committing/sharing real keys and a
+      rotation reminder — not removed outright, since some deploy targets
+      genuinely need it
+- [x] Document: `GOOGLE_APPLICATION_CREDENTIALS` (file path / ADC) as primary option
+- [x] OR: Use Application Default Credentials (ADC) — documented
+- [ ] Add warning comment in code (`src/lib/bigquery.ts` not touched in this pass)
+- [ ] Document in README.md (not done in this pass)
 
-**Files to update:**
+**Files updated:**
 - `.env.example`
-- `src/lib/bigquery.ts` (add comments)
-- `README.md`
 
 ---
 
@@ -130,17 +152,23 @@ curl -I https://app.local/api/search
 
 ---
 
-#### 6. **Implement No-Auth Route Check**
-**Estimated Time:** 30 min
+#### 6. **Implement No-Auth Route Check** — ✅ DONE (2026-07-13)
 
-- [ ] Add middleware or route check to prevent accidental public endpoints
-- [ ] Document which routes MUST have auth:
+- [x] Device-gate middleware (`src/middleware.ts`) now blocks every route
+      (pages + API) by default unless a valid device cookie is present —
+      a structural backstop, not just per-route checks
+- [x] Document which routes have operator-session auth:
   - `/api/submit` ✅ Protected
   - `/api/versand` ✅ Protected
-  - `/api/search` ✅ Protected (Fixed)
-  - `/api/debug` ✅ Protected (Fixed)
-  - `/api/order/[id]` ❓ Check - should be protected
-- [ ] Review all new routes before deployment
+  - `/api/search` ✅ Protected
+  - `/api/debug` ✅ Protected (plus now behind the device-gate too)
+  - `/api/search-products` ✅ Protected (was open — fixed 2026-07-13, client
+    fetch in `ArticleRow.tsx` updated to send the session token)
+  - `/api/order/[id]` — **deleted** (2026-07-13): unused dead code, no
+    component ever called it (the real order page fetches server-side via
+    `getOrder()` directly); an unauthenticated endpoint returning customer
+    PII that nothing used was a pure liability, so removed instead of fixed
+- [ ] Review all new routes before deployment (ongoing process, not a one-time task)
 
 ---
 
@@ -165,111 +193,151 @@ const secret = new TextEncoder().encode(JWT_SECRET || 'dev-only-insecure-key')
 
 ## 🎯 Priority 2: HIGH - Implement in Week 2
 
-### 8. **Implement Rate Limiting**
-**Estimated Time:** 4-6 hours  
-**Packages:** `@upstash/ratelimit@^0.4.0` (OR: Vercel built-in)
+### 8. **Implement Rate Limiting** — ✅ DONE (2026-07-13), in-memory instead of Upstash
 
-**Strategy A: Vercel Built-in (Easier)**
-```typescript
-export const config = {
-  rateLimit: {
-    limit: 5,
-    window: '1m',
-  }
-}
-```
+**Chosen approach:** Neither Vercel's built-in config nor Upstash Redis — a
+small in-memory fixed-window limiter (`src/lib/rate-limit.ts`), applied
+centrally in `src/middleware.ts` for every `/api/*` request instead of
+per-route code. Reasoning: this app is moving to a single self-hosted Node
+process ([`SELFHOSTING_PLAN.md`](SELFHOSTING_PLAN.md)), where in-memory state
+is fully reliable — paying for/operating Upstash Redis for that end state
+would be unnecessary complexity. **Caveat while still on Vercel:**
+serverless function instances don't share this in-memory state with each
+other, so it's best-effort there, not a hard guarantee.
 
-**Strategy B: Upstash Redis (More Control)**
-- [ ] Setup Upstash Redis account (free tier ok)
-- [ ] Install `npm install @upstash/ratelimit`
-- [ ] Create rate limiters:
-  - `/api/auth/session`: 5 req/min per IP
-  - `/api/search`: 30 req/min per operator
-  - `/api/submit`: 10 req/min per operator
-  - `/api/versand`: 10 req/min per operator
+- [x] Create rate limiters (in-memory, per path prefix, keyed by IP):
+  - `/api/auth/device`: 10 req / **15 min** — stricter, guards the shared
+    device-access code against brute-forcing (this endpoint didn't exist
+    when this plan was first written)
+  - `/api/auth/session`: 20 req/min
+  - `/api/search`, `/api/search-products`: 60 req/min
+  - `/api/submit`, `/api/versand`, `/api/attach-photo`: 20 req/min
+  - any other `/api/*`: 60 req/min default fallback (so a future endpoint
+    is never accidentally unlimited)
 
-**Limits:**
+**Actual limits implemented:**
 ```
-Auth:      5 requests / minute / IP
-Search:    30 requests / minute / operator
-Submit:    10 requests / minute / operator
-Versand:   10 requests / minute / operator
-Order:     50 requests / minute / operator
+Device unlock:  10 requests / 15 minutes / IP
+Auth (login):   20 requests / minute / IP
+Search:         60 requests / minute / IP
+Submit/Versand: 20 requests / minute / IP
+Everything else: 60 requests / minute / IP (default)
 ```
+Keyed by IP rather than per-operator — simpler, and given this runs on a
+handful of shared tablets, one IP already corresponds to one device.
 
 ---
 
-### 9. **Implement CSRF Protection**
-**Estimated Time:** 2-3 hours  
-**Packages:** `csrf@^3.7.0`
+### 9. **Implement CSRF Protection** — ✅ RESOLVED (2026-07-13), no token system built
 
-**Approach:** SameSite Cookies (Already partially implemented!)
+**Analysis:** A CSRF token (synchronizer/double-submit pattern) protects against
+an attacker's page silently riding on a victim's *cookie-based* auth. This app
+doesn't use cookie-based auth for state-changing operator actions:
 
-- [ ] Verify cookies have `SameSite=Strict`
-- [ ] Add CSRF token to session response
-- [ ] Validate CSRF token on POST/DELETE
-- [ ] Add to all state-changing endpoints
+- [x] Verify cookies have `SameSite=Strict` — true for the device-gate cookie
+      (`src/lib/device-auth.ts`)
+- [x] Operator session token lives in `localStorage`, attached manually via
+      `Authorization: Bearer` header (`src/lib/api-client.ts`) for every call
+      to `/api/submit`, `/api/versand`, `/api/attach-photo`, `/api/search`,
+      `/api/search-products`. A cross-site attacker page can't read another
+      origin's `localStorage` and can't attach a custom `Authorization` header
+      via a plain HTML form (the classic CSRF delivery mechanism) — this
+      closes the CSRF vector these endpoints would otherwise have.
+- [x] Cleaned up two unused, never-wired-up cookie helpers
+      (`getSessionCookieHeader`/`getClearSessionCookieHeader` in
+      `src/lib/session.ts`) left over from an earlier design — they could
+      have misled a future reader into believing session auth was
+      cookie-based (which would have reopened this exact vector).
+- **Not done:** a `csrf` package / token system — would add complexity
+  without closing a gap that doesn't currently exist.
+- **Re-evaluate if:** operator-session auth ever moves to a cookie instead of
+  `localStorage` + Bearer header — that would reintroduce the classic CSRF
+  vector and require an actual token system at that point.
 
 ---
 
-### 10. **Implement Audit Logging**
-**Estimated Time:** 3-4 hours  
-**Packages:** `pino@^8.17.0`
+### 10. **Implement Audit Logging** — ✅ DONE (2026-07-13), no Pino
 
-**Audit Events to Log:**
-- [ ] User login (session creation)
-- [ ] User logout (session deletion)
-- [ ] Retoure submission (order, items, operator)
-- [ ] Versand submission
-- [ ] Search queries (high volume, but include count)
-- [ ] Failed authentication attempts
+**Chosen approach:** `src/lib/audit-log.ts` — one structured JSON line per
+event via `console.log`/`console.warn`, no logging package. Reasoning: Pino
+needs Node APIs unavailable in the Edge runtime that `src/middleware.ts`
+runs on, which would have forced two different logging mechanisms (Pino in
+Node route handlers, something else in Edge middleware) for no real benefit
+at this app's scale. Both Vercel today and Coolify/Docker later already
+capture stdout/stderr as logs with their own retention — that's the right
+place to configure **90-day retention**, not application code.
 
-**Schema:**
+**Audit Events logged:**
+- [x] User login (`/api/auth/session` — success + failure)
+- [x] Device unlock (`/api/auth/device` — success + failure, the shared
+      device-access code login)
+- [x] Retoure submission (`/api/submit` — operator, orderId, mode, taskId)
+- [x] Versand submission (`/api/versand` — operator, trackingNumber, mode, taskId)
+- [x] Search queries (`/api/search` — **result count only**, not the raw
+      query text, since it can itself be a customer's name)
+- [x] Failed authentication attempts (login/device-unlock failures, plus
+      rate-limit rejections and device-gate rejections logged in
+      `src/middleware.ts`)
+- [ ] User logout — not logged (stateless JWT, logout has no server-side
+      effect to audit beyond the client clearing its own token)
+
+**Actual log line shape** (via `auditLog()` in `src/lib/audit-log.ts`):
 ```typescript
 {
-  timestamp: ISO string,
-  event: string,
-  operator: string,
-  action: string,
-  resource: string,
-  status: 'success' | 'failure',
-  ip: string,
-  userAgent: string,
-  details: object
+  timestamp: string   // ISO
+  event: string        // 'login' | 'device_unlock' | 'submit' | 'versand' | 'search' | 'rate_limit' | 'device_gate'
+  status: 'success' | 'failure'
+  operator?: string
+  ip?: string
+  ...eventSpecificFields
 }
 ```
 
-**Retention:** 90 days minimum
+**Retention:** 90 days minimum — configure at the hosting/log-platform level
+(Vercel project settings now, Docker log rotation / log-shipping once
+self-hosted), not enforceable from this repo.
 
 ---
 
-### 11. **Setup Error Handling & Logging**
-**Estimated Time:** 2 hours
-
-- [ ] Create centralized error handler
-- [ ] Return generic error messages to client
-- [ ] Log detailed errors to server logs
-- [ ] Implement error tracking (Sentry optional)
-- [ ] Don't expose stack traces in responses
+### 11. **Setup Error Handling & Logging** — ✅ DONE (see CRITICAL #5/#7 above)
+- [x] Return generic error messages to client
+- [x] Log detailed errors to server logs (existing `console.error` calls)
+- [x] Don't expose stack traces in responses
+- [ ] Centralized error handler — not built; each route still has its own
+      try/catch. Would be a nice-to-have refactor, not a security gap.
+- [ ] Error tracking (Sentry) — optional, not done
 
 ---
 
-### 12. **Implement HTTPS Enforcement**
-**Estimated Time:** 30 min
+### 12. **Implement HTTPS Enforcement** — ✅ DONE (2026-07-13)
 
-- [ ] Add redirect middleware: HTTP → HTTPS
-- [ ] Set `Strict-Transport-Security` header
+- [x] Add redirect middleware: HTTP → HTTPS — added in `src/middleware.ts`,
+      production-only, based on `x-forwarded-proto`. This is a backstop:
+      Vercel and the planned Coolify/Traefik setup already redirect at the
+      proxy level before a request even reaches this app.
+- [x] `Strict-Transport-Security` header — added in `next.config.ts` (see
+      CRITICAL #5 above), production only
 - [ ] Verify in production
 
 ---
 
 ## 🎯 Priority 3: MEDIUM - Nice to Have
 
-### 13. **CORS Configuration**
-**Estimated Time:** 30 min
-- [ ] Define allowed origins whitelist
-- [ ] Add `Access-Control-Allow-Origin` headers
-- [ ] Add `Access-Control-Allow-Credentials`
+### 13. **CORS Configuration** — ✅ Resolved via absence (2026-07-13), no headers added
+
+**Analysis:** Without any `Access-Control-Allow-Origin` response header,
+browsers already default to same-origin-only — no other website can read
+this API's responses. There is no legitimate cross-origin caller today (no
+other app needs to call the RetourenApp API directly). Adding CORS headers
+now would only *loosen* this default without solving a real requirement —
+so nothing was added.
+
+- [x] Define allowed origins whitelist — **none needed today**
+- Not done: `Access-Control-Allow-Origin` — intentionally, per above
+- Not done: `Access-Control-Allow-Credentials` — intentionally, per above
+- **Re-evaluate if:** a real cross-origin caller appears — e.g. a future
+  Messe-App integration that needs to call this API directly from a
+  different subdomain
 
 ---
 
@@ -295,12 +363,13 @@ Order:     50 requests / minute / operator
 
 | Priority | Package | Purpose | Effort | Impact | Status |
 |----------|---------|---------|--------|--------|--------|
-| **CRITICAL** | Zod | Input Validation | 3-4h | 🔴 Critical | ⏳ TODO |
-| **CRITICAL** | next/config | Security Headers | 1h | 🔴 Critical | ⏳ TODO |
-| **CRITICAL** | - | JWT_SECRET Required | 15m | 🔴 Critical | ⏳ TODO |
-| **HIGH** | @upstash/ratelimit | Rate Limiting | 4-6h | 🔴 Critical | ⏳ TODO |
-| **HIGH** | csrf | CSRF Protection | 2-3h | 🟠 High | ⏳ TODO |
-| **HIGH** | pino | Audit Logging | 3-4h | 🟠 High | ⏳ TODO |
+| **CRITICAL** | Zod | Input Validation | 3-4h | 🔴 Critical | ✅ Done |
+| **CRITICAL** | next/config | Security Headers | 1h | 🔴 Critical | ✅ Done |
+| **CRITICAL** | - | JWT_SECRET Required | 15m | 🔴 Critical | ✅ Done |
+| **HIGH** | ~~@upstash/ratelimit~~ | Rate Limiting | - | 🔴 Critical | ✅ Done — in-memory (`src/lib/rate-limit.ts`), no Redis needed |
+| **HIGH** | ~~csrf~~ | CSRF Protection | - | 🟠 High | ✅ Resolved via architecture, no package needed |
+| **HIGH** | ~~pino~~ | Audit Logging | - | 🟠 High | ✅ Done — structured console logging (`src/lib/audit-log.ts`), no package needed |
+| **HIGH** | ~~cors headers~~ | CORS | - | 🟠 High | ✅ Resolved via absence, no headers needed |
 | **MEDIUM** | sentry | Error Tracking | 1-2h | 🟡 Medium | ⏳ OPTIONAL |
 | **MEDIUM** | - | Dependabot | 1h | 🟡 Medium | ⏳ TODO |
 
@@ -320,46 +389,46 @@ Order:     50 requests / minute / operator
 - [x] Test: Requires valid session token
 - [x] Commit & Push
 
-### CRITICAL #3: Weak JWT Secret
-- [ ] Make JWT_SECRET required in production
-- [ ] Generate strong dev default
-- [ ] Update `.env.example`
-- [ ] Test: Production fails without JWT_SECRET
-- [ ] Commit & Push
+### CRITICAL #3: Weak JWT Secret — ✅ DONE
+- [x] Make JWT_SECRET required in production
+- [x] Also reject a JWT_SECRET shorter than 32 chars in production (not just missing)
+- [ ] Generate strong dev default (dev fallback stays a static warned string)
+- [x] Update `.env.example`
+- [ ] Test: Production fails without JWT_SECRET (not runnable in this
+      environment — no Node.js available; please verify manually)
 - **Est. Time:** 15 min
 
-### CRITICAL #4: No CSRF Protection
-- [ ] Implement CSRF token in session
-- [ ] Validate on POST/DELETE
-- [ ] Test with curl/Postman
-- [ ] Commit & Push
-- **Est. Time:** 2-3 hours
-- **Blocking:** None (can implement now)
-
-### CRITICAL #5: No Security Headers
-- [ ] Update `next.config.ts`
-- [ ] Add CSP, X-Frame-Options, HSTS
-- [ ] Test with `curl -I`
-- [ ] Verify in browser DevTools
-- [ ] Commit & Push
-- **Est. Time:** 1 hour
+### CRITICAL #4: No CSRF Protection — ✅ RESOLVED, no token built
+- [x] Analyzed: operator auth uses `localStorage` + `Authorization: Bearer`
+      header, not cookies — classic CSRF (which rides on auto-sent cookies)
+      doesn't apply. Device-gate cookie already uses `SameSite=Strict`.
+- [x] Removed two unused cookie helpers that could have misled a future
+      reader into thinking session auth was cookie-based
+- Not done: CSRF token package — would add complexity without closing a
+  real gap (see item 9 in the section above for full reasoning)
 - **Blocking:** None
 
-### CRITICAL #6: Input Validation Missing
-- [ ] Install Zod
-- [ ] Create schema file
-- [ ] Add validation to 5 routes
-- [ ] Test with invalid inputs
-- [ ] Commit & Push
-- **Est. Time:** 3-4 hours
+### CRITICAL #5: No Security Headers — ✅ DONE
+- [x] Update `next.config.ts`
+- [x] Add CSP, X-Frame-Options, HSTS (+ nosniff, Referrer-Policy, X-XSS-Protection)
+- [ ] Test with `curl -I` / verify in browser DevTools (not runnable in this
+      environment — no Node.js available; please verify manually)
+- **Blocking:** None
+
+### CRITICAL #6: Input Validation Missing — ✅ DONE
+- [x] Install Zod
+- [x] Create schema file (`src/lib/schemas.ts`)
+- [x] Add validation to all routes that accept user input, including
+      `/api/search-products` (was missing both validation and auth)
+- [ ] Test with invalid inputs (not runnable in this environment — no
+      Node.js available; please verify manually)
 - **Blocking:** Security critical
 
-### CRITICAL #7: Credentials in Env Vars
-- [ ] Update `.env.example`
-- [ ] Document best practices
-- [ ] Add code comments
-- [ ] Commit & Push
-- **Est. Time:** 30 min
+### CRITICAL #7: Credentials in Env Vars — ✅ DONE
+- [x] Update `.env.example`
+- [x] Document best practices (GOOGLE_APPLICATION_CREDENTIALS as recommended
+      default, GCP_SERVICE_ACCOUNT_JSON as clearly-marked fallback)
+- [ ] Add code comments in `src/lib/bigquery.ts` (not done in this pass)
 
 ---
 

@@ -3,6 +3,7 @@ import { searchDemoOrders } from '@/lib/demo-data'
 import { verifySessionToken, extractSessionToken } from '@/lib/session'
 import { apiJson, errorResponse } from '@/lib/api-response'
 import { SearchQuerySchema } from '@/lib/schemas'
+import { auditLog } from '@/lib/audit-log'
 import { z } from 'zod'
 
 export async function GET(request: Request) {
@@ -33,6 +34,8 @@ export async function GET(request: Request) {
     if (isBigQueryConfigured()) {
       try {
         const orders = await searchOrders(validated.q)
+        // Nur Trefferanzahl loggen, nicht den Suchtext selbst — der kann ein Kundenname sein
+        auditLog({ event: 'search', status: 'success', operator: operatorName, resultCount: orders.length, mode: 'live' })
         return Response.json({ orders, query: validated.q, mode: 'live' })
       } catch (err) {
         console.error('BigQuery search failed:', err)
@@ -41,6 +44,7 @@ export async function GET(request: Request) {
     }
 
     const orders = searchDemoOrders(validated.q)
+    auditLog({ event: 'search', status: 'success', operator: operatorName, resultCount: orders.length, mode: 'demo' })
     return Response.json({ orders, query: validated.q, mode: 'demo' })
   } catch (error) {
     if (error instanceof z.ZodError) {

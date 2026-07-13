@@ -1,11 +1,14 @@
 import { verifySessionToken, extractSessionToken } from '@/lib/session'
 import { apiJson, successResponse, errorResponse } from '@/lib/api-response'
 import { VersandSchema } from '@/lib/schemas'
+import { auditLog } from '@/lib/audit-log'
+import { getClientIp } from '@/lib/rate-limit'
 import { z } from 'zod'
 
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024 // 10MB
 
 export async function POST(request: Request) {
+  const ip = getClientIp(request)
   try {
     const token = extractSessionToken(
       request.headers.get('authorization') ?? undefined,
@@ -13,11 +16,13 @@ export async function POST(request: Request) {
     )
 
     if (!token) {
+      auditLog({ event: 'versand', status: 'failure', ip, reason: 'no_token' })
       return apiJson(errorResponse('Unauthorized: No session token'), 401)
     }
 
     const operatorName = await verifySessionToken(token)
     if (!operatorName) {
+      auditLog({ event: 'versand', status: 'failure', ip, reason: 'invalid_token' })
       return apiJson(errorResponse('Unauthorized: Invalid or expired session'), 401)
     }
 
@@ -32,6 +37,7 @@ export async function POST(request: Request) {
   if (!asanaToken || !asanaProject) {
     console.log('[demo] Asana Versand nicht konfiguriert — simuliere Einreichung:', body.trackingNumber)
     await new Promise((r) => setTimeout(r, 800))
+    auditLog({ event: 'versand', status: 'success', operator: operatorName, ip, trackingNumber: body.trackingNumber, mode: 'demo' })
     return apiJson(successResponse({ mode: 'demo', taskId: 'DEMO-VERSAND-' + Date.now() }))
   }
 
@@ -119,15 +125,18 @@ export async function POST(request: Request) {
     }
   }
 
+    auditLog({ event: 'versand', status: 'success', operator: operatorName, ip, trackingNumber: body.trackingNumber, mode: 'live', taskId: taskGid })
     return apiJson(successResponse({ mode: 'live', taskId: taskGid }))
   } catch (error) {
     if (error instanceof z.ZodError) {
+      auditLog({ event: 'versand', status: 'failure', ip, reason: 'invalid_input' })
       return apiJson(
         errorResponse(`Invalid input: ${error.issues[0]?.message || 'Invalid input'}`),
         400
       )
     }
     console.error('Versand error:', error)
+    auditLog({ event: 'versand', status: 'failure', ip, reason: 'server_error' })
     return apiJson(errorResponse('Submission failed'), 500)
   }
 }

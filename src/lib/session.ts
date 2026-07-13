@@ -3,16 +3,29 @@ import { SignJWT, jwtVerify } from 'jose'
 let _secret: Uint8Array | null = null
 let _secretWarningShown = false
 
+const MIN_SECRET_LENGTH = 32
+
 function initSecret(): Uint8Array {
   if (_secret) return _secret
 
   const envSecret = process.env.JWT_SECRET
+  const isProduction = typeof process !== 'undefined' && process.env.NODE_ENV === 'production'
 
   let secretValue: string
   if (envSecret) {
+    if (isProduction && envSecret.length < MIN_SECRET_LENGTH) {
+      throw new Error(
+        `FATAL: JWT_SECRET is too short (${envSecret.length} chars, ${MIN_SECRET_LENGTH}+ required).\n` +
+        'A short secret can be brute-forced. Generate a strong one:\n' +
+        '  export JWT_SECRET=$(openssl rand -hex 32)\n' +
+        'Or generate via:\n' +
+        '  node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"\n' +
+        'See README.md for more details.'
+      )
+    }
     secretValue = envSecret
   } else {
-    if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') {
+    if (isProduction) {
       throw new Error(
         'FATAL: JWT_SECRET environment variable is not set.\n' +
         'This is required for production. Set a 32+ character random string:\n' +
@@ -38,7 +51,7 @@ function initSecret(): Uint8Array {
   return _secret
 }
 
-function getSecret(): Uint8Array {
+export function getSecret(): Uint8Array {
   return initSecret()
 }
 
@@ -111,19 +124,4 @@ export function extractSessionToken(
   }
 
   return null
-}
-
-/**
- * Helper to set secure session cookie headers
- * Use in API responses
- */
-export function getSessionCookieHeader(token: string): string {
-  return `${SESSION_TOKEN_COOKIE}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=86400`
-}
-
-/**
- * Helper to clear session cookie
- */
-export function getClearSessionCookieHeader(): string {
-  return `${SESSION_TOKEN_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`
 }

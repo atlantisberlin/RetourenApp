@@ -3,6 +3,7 @@
 import React from 'react'
 import Image from 'next/image'
 import type { ReplacementProduct, ReturnCondition, ReturnReason } from '@/lib/types'
+import { apiGet } from '@/lib/api-client'
 import { CameraIcon, DivingIcon } from './icons'
 
 type Photo = { id: string; dataUrl: string; name: string; type: string }
@@ -64,8 +65,9 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
     productSearchTimer.current = setTimeout(async () => {
       setProductSearching(true)
       try {
-        const res = await fetch(`/api/search-products?q=${encodeURIComponent(q)}`)
-        const data = await res.json()
+        const data = await apiGet<{ products: ReplacementProduct[] }>(
+          `/api/search-products?q=${encodeURIComponent(q)}`
+        )
         setProductResults(data.products ?? [])
       } catch { setProductResults([]) }
       setProductSearching(false)
