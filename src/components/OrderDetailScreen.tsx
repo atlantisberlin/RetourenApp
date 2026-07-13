@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import type { Order } from '@/lib/types'
 import { getCustomerHistory } from '@/lib/history'
+import { formatRelativeDays } from '@/lib/format'
 
 const STATUS_LABELS: Record<string, string> = {
   '1': 'Ausstehend',
@@ -85,6 +86,12 @@ export default function OrderDetailScreen({
             <MetaRow label="Bestellnr." value={order.orderNumber} mono />
             <MetaRow label="Datum" value={order.date} />
             {order.invoiceNumber && <MetaRow label="Rechnungsnr." value={order.invoiceNumber} mono />}
+            {order.invoiceDate && (
+              <MetaRow
+                label="Rechnungsdatum"
+                value={`${order.invoiceDate}${order.invoiceDateDays != null ? ` · ${formatRelativeDays(order.invoiceDateDays)}` : ''}`}
+              />
+            )}
             {order.deliveryNoteNumber && <MetaRow label="Lieferscheinnr." value={order.deliveryNoteNumber} mono />}
             <MetaRow label="Herkunft" value={order.source ?? 'Zentrallager'} />
           </div>
@@ -139,7 +146,8 @@ export default function OrderDetailScreen({
               <circle cx="9" cy="13" r="0.75" fill="#ea580c"/>
             </svg>
             <span style={{ fontSize: 13, color: '#9a3412' }}>
-              Diese Rechnung ist vom <strong>{order.invoiceDate}</strong> — älter als 14 Tage
+              Diese Rechnung ist vom <strong>{order.invoiceDate}</strong>
+              {order.invoiceDateDays != null && <> ({formatRelativeDays(order.invoiceDateDays)})</>} — älter als 14 Tage!
             </span>
           </div>
         )}

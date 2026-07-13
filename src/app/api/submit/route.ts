@@ -3,6 +3,7 @@ import { apiJson, successResponse, errorResponse } from '@/lib/api-response'
 import { ReturnCaptureSchema } from '@/lib/schemas'
 import { auditLog } from '@/lib/audit-log'
 import { getClientIp } from '@/lib/rate-limit'
+import { formatRelativeDays } from '@/lib/format'
 import { z } from 'zod'
 
 const conditionLabel: Record<string, string> = {
@@ -80,12 +81,19 @@ export async function POST(request: Request) {
   const date = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })
   const source = body.order.source ?? 'Atlantis'
 
-  // Retourennummer: aus activeRetourenNr oder Platzhalter zum Nachtragen
-  const retourenNr = body.order.activeRetourenNr ?? '___________'
+  const returnedItems = body.items.filter((i) => i.returned)
+
+  // Retourennummer: vom Kunden im Shop selbst angelegt (existingRetoure an den
+  // zurückgesendeten Positionen), sonst Platzhalter zum Nachtragen.
+  // body.order.activeRetourenNr wird hier bewusst NICHT genutzt — das Feld
+  // wird vom normalen Bestell-Abruf nie befüllt (nur von der ungenutzten
+  // getOrderByRetourenNr), stand hier also faktisch immer auf dem Platzhalter.
+  const retourenNr = returnedItems
+    .map((i) => body.order.items.find((oi) => oi.id === i.itemId)?.existingRetoure)
+    .find((nr): nr is string => !!nr) ?? '___________'
+  const hasExistingRetoure = retourenNr !== '___________'
 
   const title = `Retoure (${retourenNr}) - ${source} - ${date} - ${body.trackingNumber || '-'} - ${body.order.customerName}`
-
-  const returnedItems = body.items.filter((i) => i.returned)
 
   // ── html_notes: HTML with <body> tag (required by Asana) ────────────────────
   const itemHtml = returnedItems.map((item) => {
@@ -109,9 +117,14 @@ export async function POST(request: Request) {
     `<li>Kundennr.: ${escapeHtmlContent(body.order.customerNumber)}</li>`,
     `<li>Kunde: ${escapeHtmlContent(body.order.customerName)}</li>`,
     rechnungsNr ? `<li>Rechnungsnr.: ${escapeHtmlContent(rechnungsNr)}</li>` : null,
+    body.order.invoiceDate
+      ? `<li>Rechnungsdatum: ${escapeHtmlContent(body.order.invoiceDate)}${
+          body.order.invoiceDateDays != null ? ` (${escapeHtmlContent(formatRelativeDays(body.order.invoiceDateDays))})` : ''
+        }</li>`
+      : null,
     body.order.deliveryNoteNumber ? `<li>Lieferscheinnr.: ${escapeHtmlContent(body.order.deliveryNoteNumber)}</li>` : null,
-    body.order.activeRetourenNr
-      ? `<li>Retourennr.: ${escapeHtmlContent(body.order.activeRetourenNr)}</li>`
+    hasExistingRetoure
+      ? `<li>Retourennr.: ${escapeHtmlContent(retourenNr)}</li>`
       : `<li>Retourennr.: ___________ (bitte nachtragen)</li>`,
     body.trackingNumber ? `<li>Tracking: ${escapeHtmlContent(body.trackingNumber)}</li>` : null,
   ].filter(Boolean).join('')
@@ -120,7 +133,14 @@ export async function POST(request: Request) {
     ? `<p>Bemerkungen: ${escapeHtmlContent(body.notes)}</p>`
     : ''
 
-  const html_notes = `<body><h2>Auftrag</h2><ul>${metaRows}</ul><h2>Zurückgekommene Positionen</h2><ul>${itemHtml}</ul>${bemerkungHtml}</body>`
+  // Auffälliger, eigenständiger Hinweis oben in der Aufgabe, wenn die
+  // Rechnung älter als 14 Tage ist — Asanas html_notes unterstützt kein CSS,
+  // daher Fettschrift + Emoji statt Farbe als "auffällig"
+  const invoiceWarningHtml = body.order.invoiceDateWarning && body.order.invoiceDate
+    ? `<p>⚠️ <strong>Achtung: Rechnung vom ${escapeHtmlContent(body.order.invoiceDate)} (${escapeHtmlContent(formatRelativeDays(body.order.invoiceDateDays ?? 0))}) — älter als 14 Tage!</strong></p>`
+    : ''
+
+  const html_notes = `<body>${invoiceWarningHtml}<h2>Auftrag</h2><ul>${metaRows}</ul><h2>Zurückgekommene Positionen</h2><ul>${itemHtml}</ul>${bemerkungHtml}</body>`
 
   console.log('[Asana] Task name:', title)
   console.log('[Asana] Photos count:', body.photos?.length ?? 0)
@@ -185,8 +205,8 @@ export async function POST(request: Request) {
 
     const subtasks: { name: string; completed: boolean }[] = [
       { name: `Paket angenommen – von: ${operatorName}`, completed: true },
-      body.order.activeRetourenNr
-        ? { name: `Retoure angelegt (${body.order.activeRetourenNr}) – von: ATLOS-Kunde`, completed: true }
+      hasExistingRetoure
+        ? { name: `Retoure angelegt (${retourenNr}) – von: ATLOS-Kunde`, completed: true }
         : { name: 'Retoure angelegt – von: ___', completed: false },
       ...(hasErstattung ? [{ name: 'Gutschrift geschrieben – von: ___', completed: false }] : []),
       ...(hasUmtausch ? [{ name: 'Umtausch gemacht – von: ___', completed: false }] : []),
@@ -257,7 +277,17 @@ export async function POST(request: Request) {
       console.warn('Photo upload errors:', photoErrors)
     }
 
-    auditLog({ event: 'submit', status: 'success', operator: operatorName, ip, orderId: body.orderId, mode: 'live', taskId: taskGid })
+    auditLog({
+      event: 'submit',
+      status: 'success',
+      operator: operatorName,
+      ip,
+      orderId: body.orderId,
+      mode: 'live',
+      taskId: taskGid,
+      retourenNr: hasExistingRetoure ? retourenNr : null,
+      invoiceOverdue: !!body.order.invoiceDateWarning,
+    })
     return apiJson(successResponse({ mode: 'live', taskId: taskGid }))
   } catch (error) {
     if (error instanceof z.ZodError) {

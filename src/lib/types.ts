@@ -10,6 +10,7 @@ export type Order = {
   deliveryNoteNumber?: string
   invoiceDate?: string
   invoiceDateWarning?: boolean
+  invoiceDateDays?: number
   status: string
   items: OrderItem[]
   // true, wenn die Artikel aus den Bestellpositionen (atlos_orders_products)

@@ -9,6 +9,7 @@ import type { ApiResponse } from '@/lib/api-response'
 import { uploadPhotosToTask } from '@/lib/photo-upload'
 import { StepIndicator } from './FotosScreen'
 import { addToHistory } from '@/lib/history'
+import { formatRelativeDays } from '@/lib/format'
 
 const CONDITION_LABELS: Record<string, string> = {
   gut: 'Gut',
@@ -173,6 +174,12 @@ export default function ZusammenfassungScreen({ orderId }: { orderId: string }) 
             {capture.order.invoiceNumber && (
               <SummaryRow label="Rechnungsnr." value={capture.order.invoiceNumber} mono />
             )}
+            {capture.order.invoiceDate && (
+              <SummaryRow
+                label="Rechnungsdatum"
+                value={`${capture.order.invoiceDate}${capture.order.invoiceDateDays != null ? ` · ${formatRelativeDays(capture.order.invoiceDateDays)}` : ''}`}
+              />
+            )}
             {capture.packageService && (
               <SummaryRow label="Paketdienst" value={capture.packageService} />
             )}
@@ -181,6 +188,29 @@ export default function ZusammenfassungScreen({ orderId }: { orderId: string }) 
             )}
           </div>
         </div>
+
+        {capture.order.invoiceDateWarning && capture.order.invoiceDate && (
+          <div style={{
+            marginBottom: 20,
+            padding: '12px 16px',
+            background: '#fff7ed',
+            border: '1px solid #fed7aa',
+            borderRadius: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0 }}>
+              <path d="M9 2L1.5 15.5h15L9 2z" stroke="#ea580c" strokeWidth="1.5" strokeLinejoin="round"/>
+              <path d="M9 7v4" stroke="#ea580c" strokeWidth="1.5" strokeLinecap="round"/>
+              <circle cx="9" cy="13" r="0.75" fill="#ea580c"/>
+            </svg>
+            <span style={{ fontSize: 13, color: '#9a3412' }}>
+              Diese Rechnung ist vom <strong>{capture.order.invoiceDate}</strong>
+              {capture.order.invoiceDateDays != null && <> ({formatRelativeDays(capture.order.invoiceDateDays)})</>} — älter als 14 Tage! Wird auch in Asana vermerkt.
+            </span>
+          </div>
+        )}
 
         {/* Returned items */}
         <div className="section-title" style={{ marginBottom: 10 }}>

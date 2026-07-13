@@ -56,6 +56,10 @@ export const OrderItemSchema = z.object({
   // BigQuery liefert für fehlende Felder null; imageUrl kann zudem
   // Dateinamen mit Leer-/Sonderzeichen enthalten, daher kein strenges url()
   imageUrl: z.string().nullish(),
+  // Ohne diese Felder würde Zod sie beim Parsen stillschweigend verwerfen —
+  // das war der Grund, warum eine bereits vom Kunden angelegte Retourennummer
+  // nie bei der Asana-Übergabe ankam, obwohl die App sie korrekt anzeigt.
+  existingRetoure: z.string().nullish(),
 })
 
 export const OrderSchema = z.object({
@@ -72,6 +76,9 @@ export const OrderSchema = z.object({
   // null, solange (noch) keine Rechnung in BigQuery vorliegt
   invoiceNr: z.string().nullish(),
   deliveryNoteNumber: z.string().nullish(),
+  invoiceDate: z.string().nullish(),
+  invoiceDateWarning: z.boolean().nullish(),
+  invoiceDateDays: z.number().nullish(),
 })
 
 export const PhotoSchema = z.object({

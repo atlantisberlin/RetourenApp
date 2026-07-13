@@ -105,11 +105,13 @@ function mapItem(item: BQItemRow, idx: number): OrderItem {
 function mapOrder(row: BQOrderRow, items: BQItemRow[], notInvoiced = false): Order {
   let invoiceDate: string | undefined
   let invoiceDateWarning: boolean | undefined
+  let invoiceDateDays: number | undefined
   if (row.orders_rechnungsdatum) {
     const d = new Date(row.orders_rechnungsdatum)
     if (!isNaN(d.getTime())) {
       invoiceDate = d.toLocaleDateString('de-DE')
       const diffDays = (Date.now() - d.getTime()) / 86_400_000
+      invoiceDateDays = Math.floor(diffDays)
       if (diffDays > 14) invoiceDateWarning = true
     }
   }
@@ -127,6 +129,7 @@ function mapOrder(row: BQOrderRow, items: BQItemRow[], notInvoiced = false): Ord
     invoiceNr: row.invoice_nr,
     invoiceDate,
     invoiceDateWarning,
+    invoiceDateDays,
     status: String(row.orders_status ?? ''),
     source: 'ATLOS',
     partnershop: isAmazon(row) ? 'amazon' : isEbay(row) ? 'ebay' : (row.partnershop ?? undefined),

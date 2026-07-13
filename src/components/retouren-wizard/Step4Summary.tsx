@@ -2,6 +2,7 @@
 
 import type { Order } from '@/lib/types'
 import type { ArticleCapture } from '@/components/retouren-wizard/ArticleRow'
+import { formatRelativeDays } from '@/lib/format'
 
 type Photo = { id: string; dataUrl: string; name: string; type: string }
 
@@ -72,6 +73,33 @@ export function Step4Summary({
           </div>
         ))}
       </div>
+
+      {/* Rechnungsdatum-Hinweis */}
+      {selectedOrder.invoiceDate && (
+        <div style={{
+          marginBottom: 20,
+          padding: '12px 16px',
+          borderRadius: 10,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          background: selectedOrder.invoiceDateWarning ? '#fff7ed' : 'var(--surface)',
+          border: `1px solid ${selectedOrder.invoiceDateWarning ? '#fed7aa' : 'var(--border)'}`,
+        }}>
+          {selectedOrder.invoiceDateWarning && (
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0 }}>
+              <path d="M9 2L1.5 15.5h15L9 2z" stroke="#ea580c" strokeWidth="1.5" strokeLinejoin="round"/>
+              <path d="M9 7v4" stroke="#ea580c" strokeWidth="1.5" strokeLinecap="round"/>
+              <circle cx="9" cy="13" r="0.75" fill="#ea580c"/>
+            </svg>
+          )}
+          <span style={{ fontSize: 13, color: selectedOrder.invoiceDateWarning ? '#9a3412' : 'var(--text-3)' }}>
+            Rechnung vom <strong>{selectedOrder.invoiceDate}</strong>
+            {selectedOrder.invoiceDateDays != null && <> ({formatRelativeDays(selectedOrder.invoiceDateDays)})</>}
+            {selectedOrder.invoiceDateWarning && ' — älter als 14 Tage! Wird auch in Asana vermerkt.'}
+          </span>
+        </div>
+      )}
 
       {/* Returned articles detail */}
       {articles.filter(a => a.returned === true).length > 0 && (
