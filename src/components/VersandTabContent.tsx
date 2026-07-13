@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { getVersandHistory, deleteFromVersandHistory } from '@/lib/versandHistory'
+import { useState, useEffect } from 'react'
+import type { VersandEntry } from '@/lib/versandHistory'
+import { apiGet } from '@/lib/api-client'
 
 const DAY_LABELS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
 
@@ -65,27 +66,6 @@ function OperatorList({ entries }: { entries: { name: string; count: number; las
   )
 }
 
-function DeleteButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        all: 'unset', cursor: 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        width: 32, height: 32, borderRadius: 8,
-        border: '1px solid var(--red-border)', color: 'var(--red)', flexShrink: 0,
-        transition: 'background 0.12s',
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--red-bg)')}
-      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-    >
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-        <path d="M2 3.5h10M5.5 3.5V2.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 .5.5v1M11 3.5l-.7 7.7a1 1 0 0 1-1 .8H4.7a1 1 0 0 1-1-.8L3 3.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    </button>
-  )
-}
-
 function getLast7Days(entries: { submittedAt: string }[]) {
   const now = new Date()
   return Array.from({ length: 7 }, (_, i) => {
@@ -111,10 +91,49 @@ function getOperatorStats(entries: { operatorName: string; submittedAt: string }
   return Object.entries(map).sort((a, b) => b[1].count - a[1].count).map(([name, v]) => ({ name, ...v }))
 }
 
-export function VersandTabContent({ isErik }: { isErik: boolean }) {
-  const [history, setHistory] = useState(() => getVersandHistory())
+export function VersandTabContent() {
+  const [history, setHistory] = useState<VersandEntry[] | null>(null)
+  const [configured, setConfigured] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  function handleDelete(id: string) { deleteFromVersandHistory(id); setHistory(getVersandHistory()) }
+  useEffect(() => {
+    let cancelled = false
+    apiGet<{ entries: VersandEntry[]; configured: boolean }>('/api/versand-history')
+      .then((data) => {
+        if (cancelled) return
+        setHistory(data.entries)
+        setConfigured(data.configured)
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setError(e instanceof Error ? e.message : String(e))
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  if (error) {
+    return (
+      <div className="empty-state" style={{ marginTop: 60 }}>
+        <p>Verlauf konnte nicht geladen werden: {error}</p>
+      </div>
+    )
+  }
+
+  if (history === null) {
+    return (
+      <div className="empty-state" style={{ marginTop: 60 }}>
+        <p>Lade Statistik…</p>
+      </div>
+    )
+  }
+
+  if (!configured) {
+    return (
+      <div className="empty-state" style={{ marginTop: 60 }}>
+        <p>Asana ist nicht konfiguriert — Statistik nicht verfügbar.</p>
+      </div>
+    )
+  }
 
   if (history.length === 0) {
     return (
@@ -178,33 +197,6 @@ export function VersandTabContent({ isErik }: { isErik: boolean }) {
         <>
           <div className="section-title" style={{ marginBottom: 12 }}>Nach Mitarbeiter</div>
           <OperatorList entries={getOperatorStats(history)} />
-        </>
-      )}
-
-      {isErik && (
-        <>
-          <div className="section-title" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            Verlauf verwalten
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.08em', color: 'var(--text-muted)', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px' }}>Admin</span>
-          </div>
-          <div className="card-section" style={{ marginBottom: 28 }}>
-            {history.map((entry, i) => (
-              <div key={entry.id}>
-                {i > 0 && <hr />}
-                <div style={{ padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>
-                      {entry.carrier ? `${entry.carrier} · ` : ''}{entry.trackingNumber}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                      {entry.operatorName} · {new Date(entry.submittedAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                    </div>
-                  </div>
-                  <DeleteButton onClick={() => handleDelete(entry.id)} />
-                </div>
-              </div>
-            ))}
-          </div>
         </>
       )}
     </div>

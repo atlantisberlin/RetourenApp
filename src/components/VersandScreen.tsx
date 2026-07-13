@@ -2,8 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { getOperator, refreshActivity } from '@/lib/operator'
-import { addToVersandHistory } from '@/lib/versandHistory'
+import { refreshActivity } from '@/lib/operator'
 import { apiPost } from '@/lib/api-client'
 import type { ApiResponse } from '@/lib/api-response'
 import { compressImageToDataUrl } from '@/lib/compress-image'
@@ -80,16 +79,6 @@ export default function VersandScreen() {
         }
       }
 
-      addToVersandHistory({
-        carrier,
-        trackingNumber: trackingNumber.trim(),
-        deliveryNote: deliveryNote.trim(),
-        insuranceValue: insuranceValue.trim(),
-        notes: notes.trim(),
-        operatorName: getOperator() ?? 'Unbekannt',
-        submittedAt: new Date().toISOString(),
-        taskId: data.taskId,
-      })
       setTaskId(data.taskId)
       setMode((data.mode as 'live' | 'demo') || 'demo')
       setSubmitted(true)

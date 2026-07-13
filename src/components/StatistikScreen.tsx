@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getOperator } from '@/lib/operator'
 import { RetourenTabContent } from '@/components/RetourenTabContent'
 import { VersandTabContent } from '@/components/VersandTabContent'
 
@@ -23,7 +22,6 @@ function BackButton({ onClick }: { onClick: () => void }) {
 export default function StatistikScreen() {
   const router = useRouter()
   const [tab, setTab] = useState<'retouren' | 'versand'>('retouren')
-  const [isErik] = useState(() => getOperator() === 'Erik')
 
   return (
     <>
@@ -59,7 +57,7 @@ export default function StatistikScreen() {
         })}
       </div>
 
-      {tab === 'retouren' ? <RetourenTabContent isErik={isErik} /> : <VersandTabContent isErik={isErik} />}
+      {tab === 'retouren' ? <RetourenTabContent /> : <VersandTabContent />}
     </>
   )
 }
