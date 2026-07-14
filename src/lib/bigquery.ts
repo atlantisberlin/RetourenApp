@@ -60,6 +60,7 @@ type BQOrderRow = {
   invoice_nr?: string
   partnershop?: string
   extern_orders_id?: string
+  packingslip_nr?: string
 }
 
 type BQItemRow = {
@@ -134,6 +135,7 @@ function mapOrder(row: BQOrderRow, items: BQItemRow[], notInvoiced = false): Ord
     source: 'ATLOS',
     partnershop: isAmazon(row) ? 'amazon' : isEbay(row) ? 'ebay' : (row.partnershop ?? undefined),
     externOrderId: row.extern_orders_id ?? undefined,
+    deliveryNoteNumber: row.packingslip_nr ?? undefined,
     notInvoiced: notInvoiced || undefined,
     items: items.map((item, i) => mapItem(item, i)),
   }
@@ -252,6 +254,7 @@ export async function searchOrders(query: string): Promise<Order[]> {
 
   const q = query.trim()
   const isNumeric = /^\d+$/.test(q)
+  const qLike = `%${q}%`
   const nameSearch = `%${q}%`
 
   const sql = `
@@ -267,7 +270,8 @@ export async function searchOrders(query: string): Promise<Order[]> {
       o.partnershop,
       cust.customers_nr,
       inv.orders_rechnungsdatum,
-      inv.invoice_nr
+      inv.invoice_nr,
+      pack.packingslip_nr
     FROM ${table(T_ORDERS)} o
     LEFT JOIN (
       SELECT customers_id, ANY_VALUE(customers_nr) AS customers_nr
@@ -279,30 +283,36 @@ export async function searchOrders(query: string): Promise<Order[]> {
       FROM ${table(T_INVOICE)}
       GROUP BY orders_id
     ) inv ON o.orders_id = inv.orders_id
+    LEFT JOIN (
+      SELECT xo.extern_orders_id AS bs_nr, ANY_VALUE(xp.packingslip_nr) AS packingslip_nr
+      FROM ${xTable(T_XANARIO_PACKINGSLIP)} xp
+      JOIN ${xTable(T_XANARIO_ORDERS)} xo ON xp.orders_id = xo.orders_id
+      GROUP BY xo.extern_orders_id
+    ) pack ON o.bs_nr = pack.bs_nr
     WHERE
-      ${isNumeric ? `o.orders_id = @q OR o.customers_id = @q OR` : ''}
-      o.bs_nr = @q OR
-      o.extern_orders_id = @q OR
-      cust.customers_nr = @q OR
-      inv.invoice_nr = @q OR
+      ${isNumeric ? `CAST(o.orders_id AS STRING) LIKE @qLike OR CAST(o.customers_id AS STRING) LIKE @qLike OR` : ''}
+      o.bs_nr LIKE @qLike OR
+      o.extern_orders_id LIKE @qLike OR
+      cust.customers_nr LIKE @qLike OR
+      inv.invoice_nr LIKE @qLike OR
       o.orders_id IN (
         SELECT DISTINCT inv2.orders_id
         FROM ${table(T_RETOUREN)} r2
         JOIN ${table(T_INVOICE)} inv2 ON r2.invoice_id = inv2.invoice_id
-        WHERE r2.retouren_nr = @q
+        WHERE r2.retouren_nr LIKE @qLike
       ) OR
       o.bs_nr IN (
         SELECT xo.extern_orders_id
         FROM ${xTable(T_XANARIO_PACKINGSLIP)} xp
         JOIN ${xTable(T_XANARIO_ORDERS)} xo ON xp.orders_id = xo.orders_id
-        WHERE xp.packingslip_nr = @q
+        WHERE xp.packingslip_nr LIKE @qLike
       ) OR
       LOWER(CONCAT(COALESCE(o.delivery_firstname, ''), ' ', COALESCE(o.delivery_lastname, ''))) LIKE LOWER(@name) OR
       LOWER(CONCAT(COALESCE(o.billing_firstname, ''), ' ', COALESCE(o.billing_lastname, ''))) LIKE LOWER(@name)
     ORDER BY o.date_purchased DESC
     LIMIT 20
   `
-  const params: Record<string, string> = { q, name: nameSearch }
+  const params: Record<string, string> = { qLike, name: nameSearch }
 
   const [rows] = await bq.query({ query: sql, params })
   if (!rows || rows.length === 0) return []
@@ -339,95 +349,6 @@ export async function searchOrders(query: string): Promise<Order[]> {
     const oid = String(r.orders_id)
     return mapOrder(r, itemsByOrder[oid] ?? [], notInvoiced.has(oid))
   })
-}
-
-export async function getOrder(id: string): Promise<Order | null> {
-  const bq = getClient()
-  if (!bq) return null
-
-  const sql = `
-    SELECT
-      o.orders_id,
-      o.customers_id,
-      CONCAT(COALESCE(o.delivery_firstname, ''), ' ', COALESCE(o.delivery_lastname, '')) AS delivery_name,
-      o.customers_email_address,
-      o.date_purchased,
-      o.orders_status,
-      o.bs_nr,
-      o.extern_orders_id,
-      o.partnershop,
-      cust.customers_nr,
-      inv.orders_rechnungsdatum,
-      inv.invoice_nr
-    FROM ${table(T_ORDERS)} o
-    LEFT JOIN (
-      SELECT customers_id, ANY_VALUE(customers_nr) AS customers_nr
-      FROM ${table(T_CUSTOMERS)}
-      GROUP BY customers_id
-    ) cust ON o.customers_id = cust.customers_id
-    LEFT JOIN (
-      SELECT orders_id, ANY_VALUE(orders_rechnungsdatum) AS orders_rechnungsdatum, ANY_VALUE(invoice_nr) AS invoice_nr
-      FROM ${table(T_INVOICE)}
-      GROUP BY orders_id
-    ) inv ON o.orders_id = inv.orders_id
-    WHERE o.orders_id = @id
-    LIMIT 1
-  `
-  const [rows] = await bq.query({ query: sql, params: { id } })
-  if (!rows || rows.length === 0) return null
-
-  let itemRows = await fetchItems(bq, [id])
-  let notInvoiced = false
-  // Fallback auf Bestellpositionen, wenn (noch) keine Rechnung in BQ vorliegt
-  if (itemRows.length === 0) {
-    try {
-      itemRows = await fetchOrderProductItems(bq, [id])
-      notInvoiced = itemRows.length > 0
-    } catch (e) {
-      console.error('orders_products fallback failed (non-fatal):', e)
-    }
-  }
-  return mapOrder((rows as BQOrderRow[])[0], itemRows, notInvoiced)
-}
-
-export async function getOrderByRetourenNr(retourenNr: string): Promise<Order | null> {
-  const bq = getClient()
-  if (!bq) return null
-
-  const [retRows] = await bq.query({
-    query: `SELECT retouren_id, invoice_id FROM ${table(T_RETOUREN)} WHERE retouren_nr = @nr LIMIT 1`,
-    params: { nr: retourenNr },
-  })
-  if (!retRows || retRows.length === 0) return null
-
-  const { retouren_id, invoice_id } = retRows[0] as { retouren_id: string; invoice_id: string }
-
-  const [invRows] = await bq.query({
-    query: `SELECT orders_id FROM ${table(T_INVOICE)} WHERE invoice_id = @id LIMIT 1`,
-    params: { id: String(invoice_id) },
-  })
-  if (!invRows || invRows.length === 0) return null
-
-  const orderId = String((invRows[0] as { orders_id: string }).orders_id)
-  const order = await getOrder(orderId)
-  if (!order) return null
-
-  const [rpRows] = await bq.query({
-    query: `SELECT invoice_products_id FROM ${table(T_RETOUREN_PRODUCTS)} WHERE retouren_id = @id`,
-    params: { id: String(retouren_id) },
-  })
-  const activeIds = new Set(
-    (rpRows as { invoice_products_id: string }[]).map((r) => String(r.invoice_products_id))
-  )
-
-  return {
-    ...order,
-    activeRetourenNr: retourenNr,
-    items: order.items.map((item) => ({
-      ...item,
-      inActiveRetoure: activeIds.has(item.id),
-    })),
-  }
 }
 
 const T_XANARIO_PRODUCTS = process.env.BQ_TABLE_XANARIO_PRODUCTS ?? 'shop_products'
@@ -478,11 +399,4 @@ export async function searchProducts(query: string): Promise<{ productId: string
     ean: r.products_ean ?? undefined,
     imageUrl: r.products_image ? IMAGE_BASE + r.products_image : undefined,
   }))
-}
-
-export function isBigQueryConfigured(): boolean {
-  return !!(
-    process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-    process.env.GCP_SERVICE_ACCOUNT_JSON
-  )
 }

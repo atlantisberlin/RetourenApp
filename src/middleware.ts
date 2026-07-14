@@ -21,6 +21,7 @@ const RATE_LIMITS: { prefix: string; limit: number; windowMs: number }[] = [
   { prefix: '/api/search-products', limit: 60, windowMs: 60_000 },
   { prefix: '/api/search', limit: 60, windowMs: 60_000 },
   { prefix: '/api/submit', limit: 20, windowMs: 60_000 },
+  { prefix: '/api/undelivered', limit: 20, windowMs: 60_000 },
   { prefix: '/api/versand', limit: 20, windowMs: 60_000 },
   { prefix: '/api/attach-photo', limit: 20, windowMs: 60_000 },
 ]

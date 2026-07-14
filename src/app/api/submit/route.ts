@@ -4,6 +4,7 @@ import { ReturnCaptureSchema } from '@/lib/schemas'
 import { auditLog } from '@/lib/audit-log'
 import { getClientIp } from '@/lib/rate-limit'
 import { formatRelativeDays } from '@/lib/format'
+import { escapeHtmlContent } from '@/lib/asana-format'
 import { z } from 'zod'
 
 const conditionLabel: Record<string, string> = {
@@ -20,23 +21,6 @@ const reasonLabel: Record<string, string> = {
   groesse_passt_nicht: 'Größe passt nicht',
   beschaedigt_bei_lieferung: 'Beschädigt bei Lieferung',
   sonstiges: 'Sonstiges',
-}
-
-const MAX_PHOTO_SIZE = 10 * 1024 * 1024 // 10MB
-
-function escapeHtmlContent(str: string): string {
-  return str
-    // strip characters that Asana's XML parser rejects: C0 controls (except
-    // tab/LF/CR, e.g. GS1 barcode separators from scanners), DEL, C1 controls,
-    // unpaired surrogates and non-characters
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F￾￿]/g, '')
-    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '')
-    .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
 
 export async function POST(request: Request) {
@@ -72,10 +56,9 @@ export async function POST(request: Request) {
   const umtauschTagGid = process.env.ASANA_UMTAUSCH_TAG_GID?.trim() || '1208092258165924'
 
   if (!asanaToken || !asanaProject) {
-    console.log('[demo] Asana nicht konfiguriert — simuliere Einreichung:', body.orderId)
-    await new Promise((r) => setTimeout(r, 800))
-    auditLog({ event: 'submit', status: 'success', operator: operatorName, ip, orderId: body.orderId, mode: 'demo' })
-    return apiJson(successResponse({ mode: 'demo', taskId: 'DEMO-' + Date.now() }))
+    console.error('Asana nicht konfiguriert (ASANA_TOKEN/ASANA_PROJECT_GID fehlen)')
+    auditLog({ event: 'submit', status: 'failure', ip, reason: 'asana_not_configured' })
+    return apiJson(errorResponse('Asana ist nicht konfiguriert'), 503)
   }
 
   const date = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -85,9 +68,6 @@ export async function POST(request: Request) {
 
   // Retourennummer: vom Kunden im Shop selbst angelegt (existingRetoure an den
   // zurückgesendeten Positionen), sonst Platzhalter zum Nachtragen.
-  // body.order.activeRetourenNr wird hier bewusst NICHT genutzt — das Feld
-  // wird vom normalen Bestell-Abruf nie befüllt (nur von der ungenutzten
-  // getOrderByRetourenNr), stand hier also faktisch immer auf dem Platzhalter.
   const retourenNr = returnedItems
     .map((i) => body.order.items.find((oi) => oi.id === i.itemId)?.existingRetoure)
     .find((nr): nr is string => !!nr) ?? '___________'
@@ -143,9 +123,7 @@ export async function POST(request: Request) {
   const html_notes = `<body>${invoiceWarningHtml}<h2>Auftrag</h2><ul>${metaRows}</ul><h2>Zurückgekommene Positionen</h2><ul>${itemHtml}</ul>${bemerkungHtml}</body>`
 
   console.log('[Asana] Task name:', title)
-  console.log('[Asana] Photos count:', body.photos?.length ?? 0)
   console.log('[Asana] html_notes length:', html_notes.length)
-  console.log('[Asana] Photos included in payload:', !!body.photos)
   console.log('[Asana] Tags:', [
     ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
     ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
@@ -228,67 +206,17 @@ export async function POST(request: Request) {
     }
   }
 
-  // Fotos als Anhänge hochladen
-  const photoErrors: string[] = []
-  if (taskGid && body.photos && body.photos.length > 0) {
-    for (let i = 0; i < body.photos.length; i++) {
-      const photo = body.photos[i]
-      try {
-        const matches = photo.dataUrl.match(/^data:([^;]+);base64,(.+)$/)
-        if (!matches) {
-          photoErrors.push(`Foto ${i + 1}: Ungültiges Datenformat`)
-          continue
-        }
-        const mimeType = matches[1]
-        const base64Data = matches[2]
-        const buffer = Buffer.from(base64Data, 'base64')
-
-        // Check file size limit (10MB)
-        if (buffer.length > MAX_PHOTO_SIZE) {
-          const sizeMB = (buffer.length / 1024 / 1024).toFixed(2)
-          photoErrors.push(`Foto ${i + 1}: ${sizeMB}MB > 10MB Limit`)
-          continue
-        }
-
-        const formData = new FormData()
-        const blob = new Blob([buffer], { type: mimeType })
-        formData.append('file', blob, `${photo.type}-${i + 1}.jpg`)
-
-        const attachRes = await fetch(`https://app.asana.com/api/1.0/tasks/${taskGid}/attachments`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${asanaToken}` },
-          body: formData,
-        })
-        if (!attachRes.ok) {
-          const err = await attachRes.text()
-          console.error(`Foto-Upload ${i + 1} fehlgeschlagen (${attachRes.status}):`, err)
-          photoErrors.push(`Foto ${i + 1}: Asana API Fehler ${attachRes.status}`)
-        } else {
-          console.log(`Foto ${i + 1} erfolgreich hochgeladen`)
-        }
-      } catch (err) {
-        console.error(`Fehler beim Upload von Foto ${i + 1}:`, err)
-        photoErrors.push(`Foto ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
-      }
-    }
-  }
-
-    if (photoErrors.length > 0) {
-      console.warn('Photo upload errors:', photoErrors)
-    }
-
     auditLog({
       event: 'submit',
       status: 'success',
       operator: operatorName,
       ip,
       orderId: body.orderId,
-      mode: 'live',
       taskId: taskGid,
       retourenNr: hasExistingRetoure ? retourenNr : null,
       invoiceOverdue: !!body.order.invoiceDateWarning,
     })
-    return apiJson(successResponse({ mode: 'live', taskId: taskGid }))
+    return apiJson(successResponse({ taskId: taskGid }))
   } catch (error) {
     if (error instanceof z.ZodError) {
       auditLog({ event: 'submit', status: 'failure', ip, reason: 'invalid_input' })

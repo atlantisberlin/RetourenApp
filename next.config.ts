@@ -11,7 +11,7 @@ const csp = [
   `script-src 'self'${isProd ? '' : " 'unsafe-eval' 'unsafe-inline'"}`,
   "style-src 'self' 'unsafe-inline'",
   // data: für aufgenommene Fotos (Base64-Vorschau vor dem Asana-Upload)
-  "img-src 'self' data: https://www.atlantiscloud.de https://images.unsplash.com",
+  "img-src 'self' data: https://www.atlantiscloud.de",
   "font-src 'self' data:",
   "connect-src 'self'",
   "frame-ancestors 'none'",
@@ -46,10 +46,6 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'www.atlantiscloud.de',
-      },
-      {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
       },
     ],
   },

@@ -1,4 +1,4 @@
-import { createSessionToken } from '@/lib/session'
+import { createSessionToken, verifySessionToken, extractSessionToken } from '@/lib/session'
 import { apiJson, successResponse, errorResponse } from '@/lib/api-response'
 import { SessionCreateSchema } from '@/lib/schemas'
 import { auditLog } from '@/lib/audit-log'
@@ -39,8 +39,15 @@ export async function POST(request: Request) {
 
 /**
  * DELETE /api/auth/session
- * Logout: clear session token
+ * Logout: JWTs sind zustandslos, es gibt serverseitig nichts zu invalidieren —
+ * dieser Aufruf dient nur dem Audit-Log
  */
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const token = extractSessionToken(
+    request.headers.get('authorization') ?? undefined,
+    request.headers.get('cookie') ?? undefined
+  )
+  const operatorName = token ? await verifySessionToken(token) : null
+  auditLog({ event: 'logout', status: 'success', operator: operatorName ?? undefined })
   return apiJson(successResponse({ message: 'Session cleared' }), 200)
 }

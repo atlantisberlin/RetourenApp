@@ -5,8 +5,6 @@ import { auditLog } from '@/lib/audit-log'
 import { getClientIp } from '@/lib/rate-limit'
 import { z } from 'zod'
 
-const MAX_PHOTO_SIZE = 10 * 1024 * 1024 // 10MB
-
 export async function POST(request: Request) {
   const ip = getClientIp(request)
   try {
@@ -35,10 +33,9 @@ export async function POST(request: Request) {
   const asanaProject = process.env.ASANA_VERSAND_PROJECT_GID?.trim()
 
   if (!asanaToken || !asanaProject) {
-    console.log('[demo] Asana Versand nicht konfiguriert — simuliere Einreichung:', body.trackingNumber)
-    await new Promise((r) => setTimeout(r, 800))
-    auditLog({ event: 'versand', status: 'success', operator: operatorName, ip, trackingNumber: body.trackingNumber, mode: 'demo' })
-    return apiJson(successResponse({ mode: 'demo', taskId: 'DEMO-VERSAND-' + Date.now() }))
+    console.error('Asana Versand nicht konfiguriert (ASANA_TOKEN/ASANA_VERSAND_PROJECT_GID fehlen)')
+    auditLog({ event: 'versand', status: 'failure', ip, reason: 'asana_not_configured' })
+    return apiJson(errorResponse('Asana ist nicht konfiguriert'), 503)
   }
 
   const date = new Date().toLocaleDateString('de-DE', {
@@ -87,46 +84,8 @@ export async function POST(request: Request) {
   const data = await res.json()
   const taskGid = data.data?.gid
 
-  if (taskGid && body.photos && body.photos.length > 0) {
-    for (let i = 0; i < body.photos.length; i++) {
-      const photo = body.photos[i]
-      try {
-        const matches = photo.dataUrl.match(/^data:([^;]+);base64,(.+)$/)
-        if (!matches) continue
-        const mimeType = matches[1]
-        const base64Data = matches[2]
-        const buffer = Buffer.from(base64Data, 'base64')
-
-        // Check file size limit (10MB)
-        if (buffer.length > MAX_PHOTO_SIZE) {
-          const sizeMB = (buffer.length / 1024 / 1024).toFixed(2)
-          console.warn(
-            `Versand photo ${i + 1} exceeds size limit: ${sizeMB}MB > 10MB, skipping`,
-          )
-          continue
-        }
-
-        const formData = new FormData()
-        const blob = new Blob([buffer], { type: mimeType })
-        const fileName = `versand-foto-${i + 1}.jpg`
-        formData.append('file', blob, fileName)
-
-        const attachRes = await fetch(`https://app.asana.com/api/1.0/tasks/${taskGid}/attachments`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${asanaToken}` },
-          body: formData,
-        })
-        if (!attachRes.ok) {
-          console.error(`Versand-Foto-Upload fehlgeschlagen für ${fileName}:`, await attachRes.text())
-        }
-      } catch (err) {
-        console.error(`Fehler beim Upload von Versand-Foto ${i + 1}:`, err)
-      }
-    }
-  }
-
-    auditLog({ event: 'versand', status: 'success', operator: operatorName, ip, trackingNumber: body.trackingNumber, mode: 'live', taskId: taskGid })
-    return apiJson(successResponse({ mode: 'live', taskId: taskGid }))
+    auditLog({ event: 'versand', status: 'success', operator: operatorName, ip, trackingNumber: body.trackingNumber, taskId: taskGid })
+    return apiJson(successResponse({ taskId: taskGid }))
   } catch (error) {
     if (error instanceof z.ZodError) {
       auditLog({ event: 'versand', status: 'failure', ip, reason: 'invalid_input' })

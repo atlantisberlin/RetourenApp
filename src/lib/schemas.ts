@@ -72,7 +72,6 @@ export const OrderSchema = z.object({
   items: z.array(OrderItemSchema).min(1, 'Order must have items'),
   source: z.string().nullish(),
   partnershop: z.string().nullish(),
-  activeRetourenNr: z.string().nullish(),
   // null, solange (noch) keine Rechnung in BigQuery vorliegt
   invoiceNr: z.string().nullish(),
   deliveryNoteNumber: z.string().nullish(),
@@ -81,28 +80,13 @@ export const OrderSchema = z.object({
   invoiceDateDays: z.number().nullish(),
 })
 
-export const PhotoSchema = z.object({
-  id: z.string(),
-  type: z.string(),
-  name: z.string().max(200),
-  dataUrl: z.string().startsWith('data:image/', 'Invalid image data format'),
-})
-
 export const ReturnCaptureSchema = z.object({
   orderId: z.string().min(1, 'Order ID required'),
   order: OrderSchema,
   items: z.array(ReturnItemSchema).min(1, 'At least one item required'),
-  photos: z.array(PhotoSchema).max(20, 'Maximum 20 photos allowed').optional(),
   trackingNumber: z.string().max(100).optional(),
   dhlReturn: z.boolean().optional(),
   notes: z.string().max(1000, 'Notes too long').optional(),
-})
-
-export const VersandPhotoSchema = z.object({
-  id: z.string(),
-  type: z.string(),
-  name: z.string().max(200),
-  dataUrl: z.string().startsWith('data:image/', 'Invalid image data format'),
 })
 
 export const VersandSchema = z.object({
@@ -114,19 +98,17 @@ export const VersandSchema = z.object({
   deliveryNote: z.string().max(100).optional(),
   insuranceValue: z.string().max(50).optional(),
   notes: z.string().max(1000, 'Notes too long').optional(),
-  photos: z.array(VersandPhotoSchema).max(20, 'Maximum 20 photos allowed').optional(),
 })
 
-export const OrderDetailQuerySchema = z.object({
-  id: z.string().min(1, 'Order ID required').max(100),
+export const UndeliveredCaptureSchema = z.object({
+  orderId: z.string().min(1, 'Order ID required'),
+  order: OrderSchema,
+  reason: z.enum(['annahme_verweigert', 'nicht_abgeholt', 'empfaenger_unbekannt', 'sonstiges'], {
+    error: 'Invalid reason',
+  }),
+  notes: z.string().max(1000, 'Notes too long').optional(),
 })
 
 export const ProductSearchQuerySchema = z.object({
   q: z.string().max(100, 'Search query too long (max 100 chars)'),
 })
-
-export type SearchQuery = z.infer<typeof SearchQuerySchema>
-export type SessionCreate = z.infer<typeof SessionCreateSchema>
-export type ReturnCapture = z.infer<typeof ReturnCaptureSchema>
-export type Versand = z.infer<typeof VersandSchema>
-export type OrderDetailQuery = z.infer<typeof OrderDetailQuerySchema>

@@ -1,5 +1,4 @@
-import { isBigQueryConfigured, searchOrders } from '@/lib/bigquery'
-import { searchDemoOrders } from '@/lib/demo-data'
+import { searchOrders } from '@/lib/bigquery'
 import { verifySessionToken, extractSessionToken } from '@/lib/session'
 import { apiJson, errorResponse } from '@/lib/api-response'
 import { SearchQuerySchema } from '@/lib/schemas'
@@ -28,24 +27,13 @@ export async function GET(request: Request) {
     const validated = SearchQuerySchema.parse({ q })
 
     if (!validated.q.trim()) {
-      return Response.json({ orders: [], query: validated.q, mode: 'demo' })
+      return Response.json({ orders: [], query: validated.q })
     }
 
-    if (isBigQueryConfigured()) {
-      try {
-        const orders = await searchOrders(validated.q)
-        // Nur Trefferanzahl loggen, nicht den Suchtext selbst — der kann ein Kundenname sein
-        auditLog({ event: 'search', status: 'success', operator: operatorName, resultCount: orders.length, mode: 'live' })
-        return Response.json({ orders, query: validated.q, mode: 'live' })
-      } catch (err) {
-        console.error('BigQuery search failed:', err)
-        return apiJson(errorResponse('Search failed'), 500)
-      }
-    }
-
-    const orders = searchDemoOrders(validated.q)
-    auditLog({ event: 'search', status: 'success', operator: operatorName, resultCount: orders.length, mode: 'demo' })
-    return Response.json({ orders, query: validated.q, mode: 'demo' })
+    const orders = await searchOrders(validated.q)
+    // Nur Trefferanzahl loggen, nicht den Suchtext selbst — der kann ein Kundenname sein
+    auditLog({ event: 'search', status: 'success', operator: operatorName, resultCount: orders.length })
+    return Response.json({ orders, query: validated.q })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return apiJson(errorResponse(`Invalid input: ${error.issues[0]?.message || 'Invalid input'}`), 400)

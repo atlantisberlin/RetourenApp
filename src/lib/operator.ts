@@ -1,3 +1,5 @@
+import { clearSession } from './client-session'
+
 export const OPERATORS = ['Erik', 'Josi', 'Ute', 'Sascha'] as const
 export type Operator = typeof OPERATORS[number]
 
@@ -25,6 +27,9 @@ export function setOperator(name: string): void {
 export function clearOperator(): void {
   localStorage.removeItem(KEY_NAME)
   localStorage.removeItem(KEY_TS)
+  // Löscht auch das JWT-Sitzungs-Token — sonst bleibt es beim Mitarbeiter-
+  // Wechsel gültig in localStorage liegen, bis der nächste Login es überschreibt
+  clearSession()
 }
 
 export function refreshActivity(): void {

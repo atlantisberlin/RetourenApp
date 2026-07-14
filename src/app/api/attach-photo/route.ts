@@ -38,8 +38,8 @@ export async function POST(request: Request) {
 
   const asanaToken = process.env.ASANA_TOKEN?.trim()
   if (!asanaToken) {
-    console.log('[demo] Asana nicht konfiguriert — simuliere Foto-Upload für Task', taskGid)
-    return apiJson(successResponse({ mode: 'demo' }))
+    console.error('Asana nicht konfiguriert (ASANA_TOKEN fehlt)')
+    return apiJson(errorResponse('Asana ist nicht konfiguriert'), 503)
   }
 
   const fileName = typeof name === 'string' && name ? name : 'foto.jpg'
@@ -59,5 +59,5 @@ export async function POST(request: Request) {
     return apiJson(errorResponse(`Asana Foto-Upload fehlgeschlagen (${res.status})`), 502)
   }
 
-  return apiJson(successResponse({ mode: 'live' }))
+  return apiJson(successResponse({}))
 }

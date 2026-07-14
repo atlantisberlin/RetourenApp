@@ -38,7 +38,6 @@ export default function RetourenWizard() {
   const [slipPhotos, setSlipPhotos] = useState<Photo[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Order[]>([])
-  const [searchMode, setSearchMode] = useState('')
   const [searching, setSearching] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
@@ -50,7 +49,6 @@ export default function RetourenWizard() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [taskId, setTaskId] = useState<string | null>(null)
-  const [submitMode, setSubmitMode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null)
   const [photoWarning, setPhotoWarning] = useState<string | null>(null)
@@ -196,9 +194,8 @@ export default function RetourenWizard() {
     searchTimerRef.current = setTimeout(async () => {
       setSearching(true)
       try {
-        const data = await apiGet<{ orders?: Order[]; mode?: string }>('/api/search?q=' + encodeURIComponent(q))
+        const data = await apiGet<{ orders?: Order[] }>('/api/search?q=' + encodeURIComponent(q))
         setSearchResults(data.orders ?? [])
-        setSearchMode(data.mode ?? '')
       } catch { /* ignore */ }
       setSearching(false)
     }, 350)
@@ -235,10 +232,9 @@ export default function RetourenWizard() {
         notes: notes.trim(),
         operatorName: operator ?? 'Unbekannt',
         dhlReturn: isDhlReturn === true,
-        photos: undefined,
       }
-      const response = await apiPost<{ mode: string; taskId: string }>('/api/submit', body)
-      const resp = response as ApiResponse<{ mode: string; taskId: string }>
+      const response = await apiPost<{ taskId: string }>('/api/submit', body)
+      const resp = response as ApiResponse<{ taskId: string }>
       if (!resp.success) {
         throw new Error(resp.error || 'Submission failed')
       }
@@ -252,7 +248,7 @@ export default function RetourenWizard() {
         ...articles.flatMap(a => a.photos.map(p => ({ dataUrl: p.dataUrl, type: 'artikel' }))),
       ]
 
-      if (photos.length > 0 && data.mode === 'live' && data.taskId) {
+      if (photos.length > 0 && data.taskId) {
         setPhotoProgress({ done: 0, total: photos.length })
         const uploadResult = await uploadPhotosToTask(data.taskId, photos, (done, total) => {
           setPhotoProgress({ done, total })
@@ -282,7 +278,6 @@ export default function RetourenWizard() {
         taskId: data.taskId,
       })
       setTaskId(data.taskId)
-      setSubmitMode(data.mode)
       setSubmitted(true)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler')
@@ -300,7 +295,7 @@ export default function RetourenWizard() {
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
         </div>
         <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8, color: 'var(--text)' }}>Retoure dokumentiert</h1>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', marginBottom: submitMode === 'demo' ? 8 : 32, textAlign: 'center' }}>
+        <p style={{ fontSize: 14, color: 'var(--text-3)', marginBottom: 32, textAlign: 'center' }}>
           Die Retoure wurde erfolgreich erfasst und an Asana übermittelt.
         </p>
         {photoWarning && (
@@ -308,12 +303,7 @@ export default function RetourenWizard() {
             ⚠️ {photoWarning}
           </div>
         )}
-        {submitMode === 'demo' && (
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '8px 14px', marginBottom: 32 }}>
-            Demo-Modus · {taskId}
-          </div>
-        )}
-        {submitMode === 'live' && taskId && (
+        {taskId && (
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)', marginBottom: 32 }}>Task-ID: {taskId}</div>
         )}
         <button className="btn btn-primary btn-lg btn-full" style={{ maxWidth: 320, marginBottom: 12 }} onClick={() => {
@@ -405,7 +395,6 @@ export default function RetourenWizard() {
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             searchResults={searchResults}
-            searchMode={searchMode}
             searching={searching}
             selectedOrder={selectedOrder}
             setSelectedOrder={setSelectedOrder}
