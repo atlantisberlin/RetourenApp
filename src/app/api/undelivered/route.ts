@@ -42,7 +42,8 @@ export async function POST(request: Request) {
     // Optional: eigener Abschnitt im Projekt "Retoureneingang", damit
     // unzustellbare Sendungen nicht zwischen normalen Retouren stehen
     const sectionGid = process.env.ASANA_UNZUSTELLBAR_SECTION_GID?.trim()
-    const tagGid = process.env.ASANA_UNZUSTELLBAR_TAG_GID?.trim()
+    // Tag "DHL-Unzustellbar angeschrieben"
+    const tagGid = process.env.ASANA_UNZUSTELLBAR_TAG_GID?.trim() || '1202829056220026'
 
     if (!asanaToken || !asanaProject) {
       console.error('Asana nicht konfiguriert (ASANA_TOKEN/ASANA_PROJECT_GID fehlen)')
