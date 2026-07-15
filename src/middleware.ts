@@ -32,6 +32,29 @@ function getRateLimitConfig(pathname: string): { limit: number; windowMs: number
   return match ?? DEFAULT_API_LIMIT
 }
 
+// Nonce-basierte CSP: pro Anfrage neu zufällig erzeugt. Next.js hängt dieses
+// Nonce automatisch an seine eigenen (für Hydration/Streaming nötigen)
+// Inline-Skripte an, sobald es das Nonce im CSP-Header erkennt — jedes
+// FREMDE Inline-Skript (z. B. über eine XSS-Lücke eingeschleust) hat dieses
+// Nonce nicht und bleibt weiterhin blockiert.
+function buildCsp(nonce: string): string {
+  const isProd = process.env.NODE_ENV === 'production'
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}'${isProd ? '' : " 'unsafe-eval' 'unsafe-inline'"}`,
+    // style-src braucht 'unsafe-inline', weil die App durchgängig React-
+    // Inline-Styles (style={{...}}) statt CSS-Klassen nutzt.
+    "style-src 'self' 'unsafe-inline'",
+    // data: für aufgenommene Fotos (Base64-Vorschau vor dem Asana-Upload)
+    "img-src 'self' data: https://www.atlantiscloud.de",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ')
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
@@ -60,15 +83,28 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Nonce + CSP frisch pro Anfrage — nur für Antworten nötig, die tatsächlich
+  // eine Seite rendern (Next.js hängt das Nonce automatisch an seine eigenen
+  // Skripte, sobald es im CSP-Header erkennbar ist)
+  const nonce = crypto.randomUUID()
+  const csp = buildCsp(nonce)
+  function nextWithCsp(): NextResponse {
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set('x-nonce', nonce)
+    const response = NextResponse.next({ request: { headers: requestHeaders } })
+    response.headers.set('Content-Security-Policy', csp)
+    return response
+  }
+
   if (isPublicPath(pathname)) {
-    return NextResponse.next()
+    return nextWithCsp()
   }
 
   const token = request.cookies.get(DEVICE_TOKEN_COOKIE)?.value
   const authorized = await verifyDeviceToken(token)
 
   if (authorized) {
-    return NextResponse.next()
+    return nextWithCsp()
   }
 
   if (pathname.startsWith('/api/')) {
