@@ -47,35 +47,37 @@ export const ReturnItemSchema = z.object({
 })
 
 export const OrderItemSchema = z.object({
-  id: z.string(),
-  productName: z.string(),
-  productId: z.string(),
-  sku: z.string().nullish(),
+  id: z.string().max(50),
+  productName: z.string().max(300),
+  productId: z.string().max(50),
+  sku: z.string().max(100).nullish(),
   quantity: z.number().int().min(1),
   price: z.number().min(0),
   // BigQuery liefert für fehlende Felder null; imageUrl kann zudem
   // Dateinamen mit Leer-/Sonderzeichen enthalten, daher kein strenges url()
-  imageUrl: z.string().nullish(),
+  imageUrl: z.string().max(500).nullish(),
   // Ohne diese Felder würde Zod sie beim Parsen stillschweigend verwerfen —
   // das war der Grund, warum eine bereits vom Kunden angelegte Retourennummer
   // nie bei der Asana-Übergabe ankam, obwohl die App sie korrekt anzeigt.
-  existingRetoure: z.string().nullish(),
+  existingRetoure: z.string().max(50).nullish(),
 })
 
 export const OrderSchema = z.object({
-  id: z.string().min(1),
-  orderNumber: z.string(),
-  customerNumber: z.string(),
+  id: z.string().min(1).max(50),
+  orderNumber: z.string().max(50),
+  customerNumber: z.string().max(50),
   customerName: z.string().max(200),
   // leerer String, wenn im Shop keine E-Mail hinterlegt ist; null aus BQ
   customerEmail: z.union([z.string().email(), z.literal('')]).nullish(),
-  items: z.array(OrderItemSchema).min(1, 'Order must have items'),
-  source: z.string().nullish(),
-  partnershop: z.string().nullish(),
+  // 200 Artikel deckt jede realistische Bestellung ab und begrenzt die
+  // Größe des wieder eingereichten Bestell-Objekts
+  items: z.array(OrderItemSchema).min(1, 'Order must have items').max(200),
+  source: z.string().max(100).nullish(),
+  partnershop: z.string().max(50).nullish(),
   // null, solange (noch) keine Rechnung in BigQuery vorliegt
-  invoiceNr: z.string().nullish(),
-  deliveryNoteNumber: z.string().nullish(),
-  invoiceDate: z.string().nullish(),
+  invoiceNr: z.string().max(50).nullish(),
+  deliveryNoteNumber: z.string().max(50).nullish(),
+  invoiceDate: z.string().max(50).nullish(),
   invoiceDateWarning: z.boolean().nullish(),
   invoiceDateDays: z.number().nullish(),
 })

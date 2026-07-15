@@ -165,6 +165,7 @@ export function RetourenTabContent() {
   for (const e of history) for (const item of e.items) reasonCounts[item.reason] = (reasonCounts[item.reason] ?? 0) + 1
   const sortedReasons = Object.entries(reasonCounts).sort((a, b) => b[1] - a[1])
   const maxReason = sortedReasons[0]?.[1] ?? 1
+  const operatorStats = getOperatorStats(history)
 
   return (
     <div className="page-content" style={{ paddingTop: 0 }}>
@@ -199,10 +200,10 @@ export function RetourenTabContent() {
         </>
       )}
 
-      {getOperatorStats(history).length > 0 && (
+      {operatorStats.length > 0 && (
         <>
           <div className="section-title" style={{ marginBottom: 12 }}>Nach Mitarbeiter</div>
-          <OperatorList entries={getOperatorStats(history)} />
+          <OperatorList entries={operatorStats} />
         </>
       )}
     </div>

@@ -159,6 +159,7 @@ export function VersandTabContent() {
   }
   const sortedCarriers = Object.entries(carrierCounts).sort((a, b) => b[1] - a[1])
   const maxCarrier = sortedCarriers[0]?.[1] ?? 1
+  const operatorStats = getOperatorStats(history)
 
   return (
     <div className="page-content" style={{ paddingTop: 0 }}>
@@ -193,10 +194,10 @@ export function VersandTabContent() {
         </>
       )}
 
-      {getOperatorStats(history).length > 0 && (
+      {operatorStats.length > 0 && (
         <>
           <div className="section-title" style={{ marginBottom: 12 }}>Nach Mitarbeiter</div>
-          <OperatorList entries={getOperatorStats(history)} />
+          <OperatorList entries={operatorStats} />
         </>
       )}
     </div>

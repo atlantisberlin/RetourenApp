@@ -58,6 +58,13 @@ export default function RetourenWizard() {
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingArticlesRef = useRef<Array<Omit<ArticleCapture, 'photos'>> | null>(null)
 
+  // Ausstehende Debounce-Suche abbrechen, wenn die Komponente verlassen wird
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    }
+  }, [])
+
   // Load draft + operator on mount
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

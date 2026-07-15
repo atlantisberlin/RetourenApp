@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { refreshActivity } from '@/lib/operator'
 import { apiPost, apiGet } from '@/lib/api-client'
@@ -39,6 +39,13 @@ export default function UnzustellbarScreen() {
   const [error, setError] = useState<string | null>(null)
   const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null)
   const [photoWarning, setPhotoWarning] = useState<string | null>(null)
+
+  // Ausstehende Debounce-Suche abbrechen, wenn die Komponente verlassen wird
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    }
+  }, [])
 
   const handleSearchChange = (q: string) => {
     refreshActivity()

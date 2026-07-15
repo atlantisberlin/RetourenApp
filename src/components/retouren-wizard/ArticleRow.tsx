@@ -58,6 +58,13 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
   const [productSearching, setProductSearching] = React.useState(false)
   const productSearchTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Ausstehende Debounce-Suche abbrechen, wenn die Zeile verlassen/geschlossen wird
+  React.useEffect(() => {
+    return () => {
+      if (productSearchTimer.current) clearTimeout(productSearchTimer.current)
+    }
+  }, [])
+
   const handleProductSearch = (q: string) => {
     setProductQuery(q)
     if (productSearchTimer.current) clearTimeout(productSearchTimer.current)

@@ -40,8 +40,16 @@ function pruneExpired(now: number): void {
 }
 
 export function getClientIp(request: Request): string {
+  // X-Forwarded-For ist eine Kette "Client, Proxy1, Proxy2, ...", bei der
+  // jeder Hop seine Sicht auf den vorherigen ans Ende anhängt. Der ERSTE
+  // Eintrag ist vom Client frei wählbar (Header-Spoofing) — der LETZTE ist
+  // das, was unser eigener (einziger) Reverse Proxy tatsächlich gesehen hat,
+  // und damit der einzige Wert, dem man hier vertrauen kann.
   const forwardedFor = request.headers.get('x-forwarded-for')
-  if (forwardedFor) return forwardedFor.split(',')[0].trim()
+  if (forwardedFor) {
+    const hops = forwardedFor.split(',').map((h) => h.trim()).filter(Boolean)
+    if (hops.length > 0) return hops[hops.length - 1]
+  }
 
   const realIp = request.headers.get('x-real-ip')
   if (realIp) return realIp.trim()

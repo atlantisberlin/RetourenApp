@@ -131,7 +131,8 @@ export async function POST(request: Request) {
         { name: 'Rückmeldung vom Kunden erhalten – von: ___', completed: false },
       ]
 
-      for (const subtask of subtasks) {
+      // Unteraufgaben sind unabhängig voneinander — parallel anlegen statt nacheinander
+      await Promise.all(subtasks.map(async (subtask) => {
         try {
           const subRes = await fetch('https://app.asana.com/api/1.0/tasks', {
             method: 'POST',
@@ -144,7 +145,7 @@ export async function POST(request: Request) {
         } catch (err) {
           console.error('Fehler beim Anlegen der Unteraufgabe:', err)
         }
-      }
+      }))
     }
 
     auditLog({
