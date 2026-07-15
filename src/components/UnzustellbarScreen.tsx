@@ -6,7 +6,7 @@ import { refreshActivity } from '@/lib/operator'
 import { apiPost, apiGet } from '@/lib/api-client'
 import type { ApiResponse } from '@/lib/api-response'
 import { compressImageToDataUrl } from '@/lib/compress-image'
-import { uploadPhotosToTask } from '@/lib/photo-upload'
+import { uploadPhotosToTask, type UploadablePhoto } from '@/lib/photo-upload'
 import type { Order, UndeliveredReason } from '@/lib/types'
 import { SearchSpinner, ButtonSpinner, AsanaIcon } from '@/components/retouren-wizard/icons'
 
@@ -39,6 +39,8 @@ export default function UnzustellbarScreen() {
   const [error, setError] = useState<string | null>(null)
   const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null)
   const [photoWarning, setPhotoWarning] = useState<string | null>(null)
+  const [failedPhotos, setFailedPhotos] = useState<UploadablePhoto[]>([])
+  const [retryingPhotos, setRetryingPhotos] = useState(false)
 
   // Ausstehende Debounce-Suche abbrechen, wenn die Komponente verlassen wird
   useEffect(() => {
@@ -108,6 +110,7 @@ export default function UnzustellbarScreen() {
         if (uploadResult.failed > 0) {
           console.error('Foto-Upload-Fehler:', uploadResult.errors)
           setPhotoWarning(`${uploadResult.uploaded} von ${photos.length} Fotos hochgeladen. Fehlgeschlagen: ${uploadResult.errors.join('; ')}`)
+          setFailedPhotos(uploadResult.failedPhotos)
         }
       }
 
@@ -120,11 +123,29 @@ export default function UnzustellbarScreen() {
     }
   }
 
+  async function handleRetryPhotos() {
+    if (!taskId || failedPhotos.length === 0 || retryingPhotos) return
+    setRetryingPhotos(true)
+    setPhotoProgress({ done: 0, total: failedPhotos.length })
+    const uploadResult = await uploadPhotosToTask(taskId, failedPhotos, (done, total) => {
+      setPhotoProgress({ done, total })
+    })
+    setPhotoProgress(null)
+    setFailedPhotos(uploadResult.failedPhotos)
+    if (uploadResult.failed > 0) {
+      console.error('Foto-Upload erneut fehlgeschlagen:', uploadResult.errors)
+      setPhotoWarning(`${uploadResult.uploaded} von ${failedPhotos.length} Fotos hochgeladen. Fehlgeschlagen: ${uploadResult.errors.join('; ')}`)
+    } else {
+      setPhotoWarning(null)
+    }
+    setRetryingPhotos(false)
+  }
+
   function resetAll() {
     setSubmitted(false)
     setSearchQuery(''); setSearchResults([]); setSelectedOrder(null)
     setReason(null); setNotes(''); setPhotos([])
-    setTaskId(null); setError(null); setPhotoWarning(null)
+    setTaskId(null); setError(null); setPhotoWarning(null); setFailedPhotos([])
   }
 
   if (submitted) {
@@ -150,9 +171,22 @@ export default function UnzustellbarScreen() {
             Die Aufgabe wurde im Projekt „Retoureneingang" angelegt. Das Paket bleibt ungeöffnet liegen, bis der Kunde sich meldet.
           </p>
           {photoWarning && (
-            <div style={{ fontSize: 13, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '10px 14px', marginBottom: 24, maxWidth: 360 }}>
+            <div style={{ fontSize: 13, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, maxWidth: 360 }}>
               ⚠️ {photoWarning}
             </div>
+          )}
+          {failedPhotos.length > 0 && (
+            <button
+              className="btn btn-secondary"
+              style={{ maxWidth: 320, marginBottom: 24 }}
+              onClick={handleRetryPhotos}
+              disabled={retryingPhotos}
+            >
+              {retryingPhotos
+                ? (photoProgress ? `Foto ${photoProgress.done}/${photoProgress.total} wird hochgeladen…` : 'Wird versucht…')
+                : `${failedPhotos.length} ${failedPhotos.length === 1 ? 'Foto' : 'Fotos'} erneut hochladen`
+              }
+            </button>
           )}
           {taskId && (
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)', marginBottom: 24 }}>

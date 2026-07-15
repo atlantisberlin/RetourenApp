@@ -6,7 +6,7 @@ import { refreshActivity } from '@/lib/operator'
 import { apiPost } from '@/lib/api-client'
 import type { ApiResponse } from '@/lib/api-response'
 import { compressImageToDataUrl } from '@/lib/compress-image'
-import { uploadPhotosToTask } from '@/lib/photo-upload'
+import { uploadPhotosToTask, type UploadablePhoto } from '@/lib/photo-upload'
 
 type Photo = { id: string; dataUrl: string; name: string; type: string }
 
@@ -28,6 +28,8 @@ export default function VersandScreen() {
   const [error, setError] = useState<string | null>(null)
   const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null)
   const [photoWarning, setPhotoWarning] = useState<string | null>(null)
+  const [failedPhotos, setFailedPhotos] = useState<UploadablePhoto[]>([])
+  const [retryingPhotos, setRetryingPhotos] = useState(false)
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -75,6 +77,7 @@ export default function VersandScreen() {
         if (uploadResult.failed > 0) {
           console.error('Versand-Foto-Upload-Fehler:', uploadResult.errors)
           setPhotoWarning(`${uploadResult.uploaded} von ${photos.length} Fotos hochgeladen. Fehlgeschlagen: ${uploadResult.errors.join('; ')}`)
+          setFailedPhotos(uploadResult.failedPhotos)
         }
       }
 
@@ -85,6 +88,24 @@ export default function VersandScreen() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  async function handleRetryPhotos() {
+    if (!taskId || failedPhotos.length === 0 || retryingPhotos) return
+    setRetryingPhotos(true)
+    setPhotoProgress({ done: 0, total: failedPhotos.length })
+    const uploadResult = await uploadPhotosToTask(taskId, failedPhotos, (done, total) => {
+      setPhotoProgress({ done, total })
+    })
+    setPhotoProgress(null)
+    setFailedPhotos(uploadResult.failedPhotos)
+    if (uploadResult.failed > 0) {
+      console.error('Versand-Foto-Upload erneut fehlgeschlagen:', uploadResult.errors)
+      setPhotoWarning(`${uploadResult.uploaded} von ${failedPhotos.length} Fotos hochgeladen. Fehlgeschlagen: ${uploadResult.errors.join('; ')}`)
+    } else {
+      setPhotoWarning(null)
+    }
+    setRetryingPhotos(false)
   }
 
   if (submitted) {
@@ -110,9 +131,22 @@ export default function VersandScreen() {
             Die Asana-Aufgabe wurde im Projekt „Versand" angelegt.
           </p>
           {photoWarning && (
-            <div style={{ fontSize: 13, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '10px 14px', marginBottom: 24, maxWidth: 360 }}>
+            <div style={{ fontSize: 13, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, maxWidth: 360 }}>
               ⚠️ {photoWarning}
             </div>
+          )}
+          {failedPhotos.length > 0 && (
+            <button
+              className="btn btn-secondary"
+              style={{ maxWidth: 320, marginBottom: 24 }}
+              onClick={handleRetryPhotos}
+              disabled={retryingPhotos}
+            >
+              {retryingPhotos
+                ? (photoProgress ? `Foto ${photoProgress.done}/${photoProgress.total} wird hochgeladen…` : 'Wird versucht…')
+                : `${failedPhotos.length} ${failedPhotos.length === 1 ? 'Foto' : 'Fotos'} erneut hochladen`
+              }
+            </button>
           )}
           {taskId && (
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)', marginBottom: 24 }}>
@@ -120,7 +154,7 @@ export default function VersandScreen() {
             </div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 320 }}>
-            <button className="btn btn-primary btn-lg btn-full" onClick={() => { setSubmitted(false); setCarrier(''); setTrackingNumber(''); setDeliveryNote(''); setInsuranceValue(''); setNotes(''); setPhotos([]); setPhotoWarning(null) }}>
+            <button className="btn btn-primary btn-lg btn-full" onClick={() => { setSubmitted(false); setCarrier(''); setTrackingNumber(''); setDeliveryNote(''); setInsuranceValue(''); setNotes(''); setPhotos([]); setPhotoWarning(null); setFailedPhotos([]) }}>
               Neue Sendung dokumentieren
             </button>
             <button className="btn btn-secondary btn-full" style={{ display: 'flex' }} onClick={() => router.push('/')}>

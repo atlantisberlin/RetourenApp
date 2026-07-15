@@ -7,7 +7,7 @@ import { addToHistory } from '@/lib/history'
 import { apiPost, apiGet } from '@/lib/api-client'
 import type { ApiResponse } from '@/lib/api-response'
 import { compressImageToDataUrl } from '@/lib/compress-image'
-import { uploadPhotosToTask } from '@/lib/photo-upload'
+import { uploadPhotosToTask, type UploadablePhoto } from '@/lib/photo-upload'
 import type { Order, OrderItem, ReturnCapture, ReturnCondition, ReturnReason, ReturnResolution, ReplacementProduct } from '@/lib/types'
 import UserSelectionScreen from '@/components/UserSelectionScreen'
 import { type ArticleCapture } from '@/components/retouren-wizard/ArticleRow'
@@ -52,6 +52,8 @@ export default function RetourenWizard() {
   const [error, setError] = useState<string | null>(null)
   const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null)
   const [photoWarning, setPhotoWarning] = useState<string | null>(null)
+  const [failedPhotos, setFailedPhotos] = useState<UploadablePhoto[]>([])
+  const [retryingPhotos, setRetryingPhotos] = useState(false)
 
   const fileRef = useRef<HTMLInputElement>(null)
   const photoTargetRef = useRef<'label' | 'exterior' | 'slip' | number>('label')
@@ -264,6 +266,7 @@ export default function RetourenWizard() {
         if (uploadResult.failed > 0) {
           console.error('Foto-Upload-Fehler:', uploadResult.errors)
           setPhotoWarning(`${uploadResult.uploaded} von ${photos.length} Fotos hochgeladen. Fehlgeschlagen: ${uploadResult.errors.join('; ')}`)
+          setFailedPhotos(uploadResult.failedPhotos)
         }
       }
 
@@ -292,6 +295,24 @@ export default function RetourenWizard() {
     setSubmitting(false)
   }
 
+  const handleRetryPhotos = async () => {
+    if (!taskId || failedPhotos.length === 0 || retryingPhotos) return
+    setRetryingPhotos(true)
+    setPhotoProgress({ done: 0, total: failedPhotos.length })
+    const uploadResult = await uploadPhotosToTask(taskId, failedPhotos, (done, total) => {
+      setPhotoProgress({ done, total })
+    })
+    setPhotoProgress(null)
+    setFailedPhotos(uploadResult.failedPhotos)
+    if (uploadResult.failed > 0) {
+      console.error('Foto-Upload erneut fehlgeschlagen:', uploadResult.errors)
+      setPhotoWarning(`${uploadResult.uploaded} von ${failedPhotos.length} Fotos hochgeladen. Fehlgeschlagen: ${uploadResult.errors.join('; ')}`)
+    } else {
+      setPhotoWarning(null)
+    }
+    setRetryingPhotos(false)
+  }
+
   if (!operatorChecked) return null
   if (!operator) return <UserSelectionScreen onSelect={(name) => setOperator(name)} />
 
@@ -306,9 +327,22 @@ export default function RetourenWizard() {
           Die Retoure wurde erfolgreich erfasst und an Asana übermittelt.
         </p>
         {photoWarning && (
-          <div style={{ fontSize: 13, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '10px 14px', marginBottom: 24, maxWidth: 360, textAlign: 'center' }}>
+          <div style={{ fontSize: 13, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, maxWidth: 360, textAlign: 'center' }}>
             ⚠️ {photoWarning}
           </div>
+        )}
+        {failedPhotos.length > 0 && (
+          <button
+            className="btn btn-secondary"
+            style={{ maxWidth: 320, marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            onClick={handleRetryPhotos}
+            disabled={retryingPhotos}
+          >
+            {retryingPhotos
+              ? <><ButtonSpinner /> {photoProgress ? `Foto ${photoProgress.done}/${photoProgress.total} wird hochgeladen…` : 'Wird versucht…'}</>
+              : `${failedPhotos.length} ${failedPhotos.length === 1 ? 'Foto' : 'Fotos'} erneut hochladen`
+            }
+          </button>
         )}
         {taskId && (
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)', marginBottom: 32 }}>Task-ID: {taskId}</div>
@@ -317,7 +351,7 @@ export default function RetourenWizard() {
           localStorage.removeItem(DRAFT_KEY)
           setStep(1); setTrackingNumber(''); setIsDhlReturn(null); setLabelPhotos([]); setExteriorPhotos([]); setSlipPhotos([])
           setSearchQuery(''); setSearchResults([]); setSelectedOrder(null); setArticles([])
-          setNotes(''); setSubmitted(false); setTaskId(null); setError(null); setPhotoWarning(null)
+          setNotes(''); setSubmitted(false); setTaskId(null); setError(null); setPhotoWarning(null); setFailedPhotos([])
         }}>
           Neue Retoure
         </button>

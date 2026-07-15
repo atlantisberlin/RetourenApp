@@ -6,6 +6,9 @@ export type PhotoUploadResult = {
   uploaded: number
   failed: number
   errors: string[]
+  // Die Fotos, die fehlgeschlagen sind — damit ein "Erneut versuchen" nur
+  // diese nochmal hochlädt statt bereits erfolgreiche zu duplizieren
+  failedPhotos: UploadablePhoto[]
 }
 
 /**
@@ -19,7 +22,7 @@ export async function uploadPhotosToTask(
   photos: UploadablePhoto[],
   onProgress?: (done: number, total: number) => void
 ): Promise<PhotoUploadResult> {
-  const result: PhotoUploadResult = { uploaded: 0, failed: 0, errors: [] }
+  const result: PhotoUploadResult = { uploaded: 0, failed: 0, errors: [], failedPhotos: [] }
   const token = getSessionToken()
 
   for (let i = 0; i < photos.length; i++) {
@@ -45,10 +48,12 @@ export async function uploadPhotosToTask(
         const data = await res.json().catch(() => null) as { error?: string } | null
         result.failed++
         result.errors.push(`${label}: ${data?.error ?? `HTTP ${res.status}`}`)
+        result.failedPhotos.push(photo)
       }
     } catch (err) {
       result.failed++
       result.errors.push(`${label}: ${err instanceof Error ? err.message : String(err)}`)
+      result.failedPhotos.push(photo)
     }
     onProgress?.(i + 1, photos.length)
   }
