@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { HydrationMarker } from '@/components/HydrationMarker'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -27,7 +28,13 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="de">
+      <head>
+        {/* TEMPORÄR zur Fehlersuche (Tablet reagiert nicht auf Eingaben) —
+            danach wieder entfernen, siehe public/diagnostic.js */}
+        <script src="/diagnostic.js" />
+      </head>
       <body className="app-shell">
+        <HydrationMarker />
         <ErrorBoundary>{children}</ErrorBoundary>
       </body>
     </html>
