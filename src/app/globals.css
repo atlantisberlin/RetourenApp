@@ -136,6 +136,7 @@ input, select, textarea { font-family: var(--font-sans); }
   white-space: nowrap;
 }
 .btn:active { opacity: 0.85; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-primary {
   background: var(--purple);
