@@ -1,41 +1,53 @@
-import { createSessionToken } from '@/lib/session'
+import { createSessionToken, verifySessionToken, extractSessionToken } from '@/lib/session'
 import { apiJson, successResponse, errorResponse } from '@/lib/api-response'
+import { SessionCreateSchema } from '@/lib/schemas'
+import { auditLog } from '@/lib/audit-log'
+import { getClientIp } from '@/lib/rate-limit'
+import { z } from 'zod'
 
-/**
- * POST /api/auth/session
- * Create a new session token for an operator
- *
- * Request body: { operatorName: string }
- * Response: { success: true, data: { token: string, expiresIn: string, operatorName: string } }
- */
 export async function POST(request: Request) {
+  const ip = getClientIp(request)
   try {
-    const { operatorName } = (await request.json()) as { operatorName?: string }
+    const body = await request.json()
+    const validated = SessionCreateSchema.parse(body)
 
-    if (!operatorName?.trim()) {
-      return apiJson(errorResponse('Operator name is required'), 400)
-    }
+    const token = await createSessionToken(validated.operatorName)
 
-    const token = await createSessionToken(operatorName)
+    auditLog({ event: 'login', status: 'success', operator: validated.operatorName, ip })
 
     return apiJson(
       successResponse({
         token,
         expiresIn: '24h',
-        operatorName: operatorName.trim(),
+        operatorName: validated.operatorName,
       }),
       200
     )
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      auditLog({ event: 'login', status: 'failure', ip, reason: 'invalid_input' })
+      return apiJson(
+        errorResponse(`Invalid input: ${error.issues[0]?.message || 'Invalid input'}`),
+        400
+      )
+    }
     console.error('Session creation error:', error)
+    auditLog({ event: 'login', status: 'failure', ip, reason: 'server_error' })
     return apiJson(errorResponse('Failed to create session'), 500)
   }
 }
 
 /**
  * DELETE /api/auth/session
- * Logout: clear session token
+ * Logout: JWTs sind zustandslos, es gibt serverseitig nichts zu invalidieren —
+ * dieser Aufruf dient nur dem Audit-Log
  */
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const token = extractSessionToken(
+    request.headers.get('authorization') ?? undefined,
+    request.headers.get('cookie') ?? undefined
+  )
+  const operatorName = token ? await verifySessionToken(token) : null
+  auditLog({ event: 'logout', status: 'success', operator: operatorName ?? undefined })
   return apiJson(successResponse({ message: 'Session cleared' }), 200)
 }

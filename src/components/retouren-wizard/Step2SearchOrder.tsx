@@ -10,7 +10,6 @@ interface Step2SearchOrderProps {
   searchQuery: string
   setSearchQuery: (value: string) => void
   searchResults: Order[]
-  searchMode: string
   searching: boolean
   selectedOrder: Order | null
   setSelectedOrder: (order: Order | null) => void
@@ -25,7 +24,6 @@ export function Step2SearchOrder({
   searchQuery,
   setSearchQuery,
   searchResults,
-  searchMode,
   searching,
   selectedOrder,
   setSelectedOrder,
@@ -107,8 +105,13 @@ export function Step2SearchOrder({
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-3)', textAlign: 'center' }}>
             {selectedOrder.items.length} Artikel · {selectedOrder.date}
-            {searchMode === 'demo' && <span className="badge badge-gold" style={{ marginLeft: 8 }}>Demo</span>}
+            {selectedOrder.notInvoiced && <span className="badge badge-gold" style={{ marginLeft: 8 }}>noch nicht fakturiert</span>}
           </div>
+          {selectedOrder.notInvoiced && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginTop: 6, lineHeight: 1.4 }}>
+              Zu dieser Bestellung liegt noch keine Rechnung vor – Artikel aus den Bestellpositionen. Preise können noch abweichen.
+            </div>
+          )}
         </div>
       ) : (
         <div>
@@ -136,7 +139,6 @@ export function Step2SearchOrder({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div className="section-title" style={{ marginBottom: 4 }}>
                 {searchResults.length} Treffer
-                {searchMode === 'demo' && <span className="badge badge-gold" style={{ marginLeft: 8 }}>Demo</span>}
               </div>
               {searchResults.map(order => (
                 <button key={order.id} onClick={() => { refreshActivity(); setSelectedOrder(order) }}
@@ -158,6 +160,7 @@ export function Step2SearchOrder({
                   </div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
                     #{order.orderNumber}{order.customerNumber ? ` · KD ${order.customerNumber}` : ''}
+                    {order.notInvoiced && <span className="badge badge-gold" style={{ marginLeft: 8 }}>nicht fakturiert</span>}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                     {order.items.slice(0, 2).map(item => (

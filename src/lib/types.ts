@@ -10,12 +10,16 @@ export type Order = {
   deliveryNoteNumber?: string
   invoiceDate?: string
   invoiceDateWarning?: boolean
+  invoiceDateDays?: number
   status: string
   items: OrderItem[]
+  // true, wenn die Artikel aus den Bestellpositionen (atlos_orders_products)
+  // stammen, weil in BigQuery noch keine Rechnung (invoice_products) vorliegt.
+  // Preise/Retouren-Verknüpfungen sind dann noch nicht final.
+  notInvoiced?: boolean
   source?: string
   partnershop?: string
   externOrderId?: string
-  activeRetourenNr?: string
 }
 
 export type OrderItem = {
@@ -28,7 +32,6 @@ export type OrderItem = {
   imageUrl?: string
   existingRetoure?: string | null
   existingGutschrift?: string | null
-  inActiveRetoure?: boolean
 }
 
 export type ReturnCondition = 'gut' | 'beschaedigt' | 'unvollstaendig' | 'defekt'
@@ -68,11 +71,16 @@ export type ReturnCapture = {
   notes: string
   operatorName: string
   dhlReturn?: boolean
-  photos?: Array<{ id: string; type: string; dataUrl: string; name: string }>
 }
 
-export type SearchResult = {
-  orders: Order[]
-  query: string
-  mode: 'live' | 'demo'
+// Paket kam unzustellbar zurück (Annahme verweigert, nicht abgeholt, o.ä.) —
+// wird ungeöffnet erfasst, da der Inhalt nicht geprüft werden kann/soll.
+export type UndeliveredReason = 'annahme_verweigert' | 'nicht_abgeholt' | 'empfaenger_unbekannt' | 'sonstiges'
+
+export type UndeliveredCapture = {
+  orderId: string
+  order: Order
+  reason: UndeliveredReason
+  notes: string
+  operatorName: string
 }

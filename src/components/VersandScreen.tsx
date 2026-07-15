@@ -2,8 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { getOperator, refreshActivity } from '@/lib/operator'
-import { addToVersandHistory } from '@/lib/versandHistory'
+import { refreshActivity } from '@/lib/operator'
 import { apiPost } from '@/lib/api-client'
 import type { ApiResponse } from '@/lib/api-response'
 import { compressImageToDataUrl } from '@/lib/compress-image'
@@ -26,7 +25,6 @@ export default function VersandScreen() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [taskId, setTaskId] = useState<string | null>(null)
-  const [mode, setMode] = useState<'live' | 'demo'>('demo')
   const [error, setError] = useState<string | null>(null)
   const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null)
   const [photoWarning, setPhotoWarning] = useState<string | null>(null)
@@ -55,20 +53,20 @@ export default function VersandScreen() {
     try {
       // Fotos werden NICHT mitgesendet (413 Payload Too Large), sondern
       // nach dem Anlegen der Aufgabe einzeln über /api/attach-photo hochgeladen
-      const response = await apiPost<{ mode: string; taskId: string }>('/api/versand', {
+      const response = await apiPost<{ taskId: string }>('/api/versand', {
         carrier,
         trackingNumber: trackingNumber.trim(),
         deliveryNote: deliveryNote.trim(),
         insuranceValue: insuranceValue.trim(),
         notes: notes.trim(),
       })
-      const resp = response as ApiResponse<{ mode: string; taskId: string }>
+      const resp = response as ApiResponse<{ taskId: string }>
       if (!resp.success) {
         throw new Error(resp.error || 'Submission failed')
       }
       const data = resp.data
 
-      if (photos.length > 0 && data.mode === 'live' && data.taskId) {
+      if (photos.length > 0 && data.taskId) {
         setPhotoProgress({ done: 0, total: photos.length })
         const uploadResult = await uploadPhotosToTask(data.taskId, photos, (done, total) => {
           setPhotoProgress({ done, total })
@@ -80,18 +78,7 @@ export default function VersandScreen() {
         }
       }
 
-      addToVersandHistory({
-        carrier,
-        trackingNumber: trackingNumber.trim(),
-        deliveryNote: deliveryNote.trim(),
-        insuranceValue: insuranceValue.trim(),
-        notes: notes.trim(),
-        operatorName: getOperator() ?? 'Unbekannt',
-        submittedAt: new Date().toISOString(),
-        taskId: data.taskId,
-      })
       setTaskId(data.taskId)
-      setMode((data.mode as 'live' | 'demo') || 'demo')
       setSubmitted(true)
     } catch (e) {
       setError(String(e))
@@ -120,21 +107,14 @@ export default function VersandScreen() {
           </div>
           <h2 style={{ fontSize: 22, fontWeight: 600, marginBottom: 8 }}>Sendung dokumentiert</h2>
           <p style={{ fontSize: 15, color: 'var(--text-3)', marginBottom: 20, lineHeight: 1.5, maxWidth: '28ch' }}>
-            {mode === 'demo'
-              ? 'Demo-Modus: Die Asana-Aufgabe würde jetzt angelegt.'
-              : 'Die Asana-Aufgabe wurde im Projekt „Versand" angelegt.'}
+            Die Asana-Aufgabe wurde im Projekt „Versand" angelegt.
           </p>
           {photoWarning && (
             <div style={{ fontSize: 13, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '10px 14px', marginBottom: 24, maxWidth: 360 }}>
               ⚠️ {photoWarning}
             </div>
           )}
-          {mode === 'demo' && (
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--gold-dark)', background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', borderRadius: 8, padding: '8px 14px', marginBottom: 24 }}>
-              Demo-Modus · {taskId}
-            </div>
-          )}
-          {taskId && mode === 'live' && (
+          {taskId && (
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)', marginBottom: 24 }}>
               Task-ID: {taskId}
             </div>

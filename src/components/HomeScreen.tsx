@@ -198,6 +198,53 @@ export default function HomeScreen() {
             </svg>
           </button>
 
+          {/* Nicht zugestellte Sendung */}
+          <button
+            onClick={() => router.push('/unzustellbar')}
+            style={{
+              all: 'unset', cursor: 'pointer',
+              background: 'var(--surface)',
+              border: '1.5px solid var(--border)',
+              borderRadius: 'var(--radius)',
+              padding: '24px 24px 22px',
+              display: 'flex', alignItems: 'center', gap: 20,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+              transition: 'border-color 0.15s, box-shadow 0.15s, transform 0.12s',
+              position: 'relative', overflow: 'hidden',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--gold-dark)'
+              e.currentTarget.style.boxShadow = '0 6px 24px rgba(134,106,51,0.14)'
+              e.currentTarget.style.transform = 'translateY(-1px)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border)'
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'
+              e.currentTarget.style.transform = 'none'
+            }}
+          >
+            <div style={{
+              width: 52, height: 52, borderRadius: 14, flexShrink: 0,
+              background: 'var(--gold-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+                <rect x="5" y="9" width="16" height="12" rx="2" stroke="white" strokeWidth="2"/>
+                <path d="M5 9 L13 4 L21 9" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="19" cy="7" r="5" fill="var(--gold-dark)" stroke="white" strokeWidth="1.5"/>
+                <path d="M19 4.5v3M19 9.2v.1" stroke="white" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>Nicht zugestellte Sendung</div>
+              <div style={{ fontSize: 14, color: 'var(--text-3)', lineHeight: 1.4 }}>
+                Annahme verweigert oder nicht abgeholt — ungeöffnet erfassen
+              </div>
+            </div>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
+              <path d="M7 4l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+
           {/* Statistik */}
           <button
             onClick={() => router.push('/statistik')}

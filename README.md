@@ -29,6 +29,8 @@ npm run dev
 
 Alle Variablen sind in `.env.example` dokumentiert. Wichtigste:
 
+- `JWT_SECRET` — Signierschlüssel für Sessions & Geräte-Login (32+ Zeichen, in Produktion Pflicht)
+- `DEVICE_ACCESS_CODE` — Zugangscode fürs Tablet (`/geraet-anmelden`), gilt einmalig pro Gerät für ~1 Jahr
 - `GCP_SERVICE_ACCOUNT_JSON` — Service Account für BigQuery-Zugriff (als JSON-String)
 - `BQ_PROJECT` — GCP-Projekt (Standard: `zentrallager`)
 - `BQ_DATASET` — Dataset (Standard: `xanario_shop`)

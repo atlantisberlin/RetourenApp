@@ -50,11 +50,17 @@ export function getSessionToken(): string | null {
 
 export function clearSession(): void {
   if (typeof window === 'undefined') return
+  const token = getSessionToken()
   localStorage.removeItem(SESSION_TOKEN_KEY)
   localStorage.removeItem(OPERATOR_NAME_KEY)
   localStorage.removeItem(OPERATOR_TS_KEY)
-  // Also call logout API to clear server-side session
-  fetch('/api/auth/session', { method: 'DELETE' }).catch(console.error)
+  // Nur fürs Audit-Log (JWTs sind zustandslos, es gibt serverseitig nichts
+  // zu invalidieren) — Token mitschicken, damit der Logout dem Mitarbeiter
+  // zugeordnet werden kann
+  fetch('/api/auth/session', {
+    method: 'DELETE',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  }).catch(console.error)
 }
 
 export function hasSession(): boolean {
