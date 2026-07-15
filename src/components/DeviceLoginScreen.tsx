@@ -27,14 +27,15 @@ export default function DeviceLoginScreen() {
 
   return (
     <div
+      className="dvh-shell"
       style={{
-        minHeight: '100vh',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         padding: '24px 20px',
         gap: 28,
+        overflowY: 'auto',
       }}
     >
       <div style={{ textAlign: 'center' }}>
@@ -61,7 +62,6 @@ export default function DeviceLoginScreen() {
       >
         <input
           type="password"
-          autoFocus
           value={code}
           onChange={(e) => {
             setCode(e.target.value)

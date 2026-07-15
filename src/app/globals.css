@@ -74,6 +74,16 @@ input, select, textarea { font-family: var(--font-sans); }
   flex-direction: column;
 }
 
+/* 100vh berücksichtigt auf vielen Android-Browsern die eingeblendete
+   Bildschirmtastatur nicht — der Bereich darunter bleibt Teil der "vollen"
+   Höhe, wodurch mittig zentrierte Inhalte (z. B. ein Anmelde-Button) hinter
+   der Tastatur landen können. 100dvh (dynamic viewport height) passt sich
+   an; wird es nicht unterstützt, bleibt einfach 100vh als Fallback stehen. */
+.dvh-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 .page-header {
   background: var(--surface);
   border-bottom: 1px solid var(--border);

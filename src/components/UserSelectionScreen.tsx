@@ -82,7 +82,7 @@ export default function UserSelectionScreen({ onSelect }: { onSelect: (name: str
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="dvh-shell" style={{ display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
       <header className="page-header">
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
           Atlantis
@@ -227,7 +227,6 @@ export default function UserSelectionScreen({ onSelect }: { onSelect: (name: str
             <input
               className="input"
               type="text"
-              autoFocus
               value={selected ?? ''}
               onChange={(e) => { setSelected(e.target.value); setError(null) }}
               onKeyDown={(e) => { if (e.key === 'Enter' && trimmedName && !customNameInvalid) handleConfirm() }}
