@@ -2,24 +2,73 @@ import { BigQuery } from '@google-cloud/bigquery'
 import type { Order, OrderItem } from './types'
 
 const PROJECT = process.env.BQ_PROJECT ?? 'zentrallager'
-const DATASET = process.env.BQ_DATASET ?? 'ATLOS'
-const T_ORDERS = process.env.BQ_TABLE_ORDERS ?? 'atlos_orders'
-const T_ORDERS_PRODUCTS = process.env.BQ_TABLE_ORDERS_PRODUCTS ?? 'atlos_orders_products'
-const T_CUSTOMERS = process.env.BQ_TABLE_CUSTOMERS ?? 'atlos_customers'
-const T_PRODUCTS = process.env.BQ_TABLE_PRODUCTS ?? 'atlos_products'
-const T_INVOICE = process.env.BQ_TABLE_INVOICE ?? 'atlos_invoice'
-const T_INVOICE_PRODUCTS = process.env.BQ_TABLE_INVOICE_PRODUCTS ?? 'atlos_invoice_products'
-const T_RETOUREN = process.env.BQ_TABLE_RETOUREN ?? 'atlos_retouren'
-const T_RETOUREN_PRODUCTS = process.env.BQ_TABLE_RETOUREN_PRODUCTS ?? 'atlos_retouren_products'
-const T_GUTSCHRIFT = process.env.BQ_TABLE_GUTSCHRIFT ?? 'atlos_gutschrift'
-const T_GUTSCHRIFT_PRODUCTS = process.env.BQ_TABLE_GUTSCHRIFT_PRODUCTS ?? 'atlos_gutschrift_products'
 
+type ShopSource = 'ATLOS' | 'TSHOS'
+
+type ShopTables = {
+  orders: string
+  ordersProducts: string
+  customers: string
+  products: string
+  invoice: string
+  invoiceProducts: string
+  retouren: string
+  retourenProducts: string
+  gutschrift: string
+  gutschriftProducts: string
+}
+
+type ShopConfig = {
+  source: ShopSource
+  dataset: string
+  tables: ShopTables
+}
+
+// ATLOS und TSHOS sind baugleiche Shop-Datasets (gleiches Tabellenschema,
+// unterschiedliche Namen) — Suche läuft über beide parallel, siehe searchOrders().
+const SHOPS: ShopConfig[] = [
+  {
+    source: 'ATLOS',
+    dataset: process.env.BQ_DATASET ?? 'ATLOS',
+    tables: {
+      orders: process.env.BQ_TABLE_ORDERS ?? 'atlos_orders',
+      ordersProducts: process.env.BQ_TABLE_ORDERS_PRODUCTS ?? 'atlos_orders_products',
+      customers: process.env.BQ_TABLE_CUSTOMERS ?? 'atlos_customers',
+      products: process.env.BQ_TABLE_PRODUCTS ?? 'atlos_products',
+      invoice: process.env.BQ_TABLE_INVOICE ?? 'atlos_invoice',
+      invoiceProducts: process.env.BQ_TABLE_INVOICE_PRODUCTS ?? 'atlos_invoice_products',
+      retouren: process.env.BQ_TABLE_RETOUREN ?? 'atlos_retouren',
+      retourenProducts: process.env.BQ_TABLE_RETOUREN_PRODUCTS ?? 'atlos_retouren_products',
+      gutschrift: process.env.BQ_TABLE_GUTSCHRIFT ?? 'atlos_gutschrift',
+      gutschriftProducts: process.env.BQ_TABLE_GUTSCHRIFT_PRODUCTS ?? 'atlos_gutschrift_products',
+    },
+  },
+  {
+    source: 'TSHOS',
+    dataset: process.env.BQ_TSHOS_DATASET ?? 'TSHOS',
+    tables: {
+      orders: process.env.BQ_TSHOS_TABLE_ORDERS ?? 'tshos_orders',
+      ordersProducts: process.env.BQ_TSHOS_TABLE_ORDERS_PRODUCTS ?? 'tshos_orders_products',
+      customers: process.env.BQ_TSHOS_TABLE_CUSTOMERS ?? 'tshos_customers',
+      products: process.env.BQ_TSHOS_TABLE_PRODUCTS ?? 'tshos_products',
+      invoice: process.env.BQ_TSHOS_TABLE_INVOICE ?? 'tshos_invoice',
+      invoiceProducts: process.env.BQ_TSHOS_TABLE_INVOICE_PRODUCTS ?? 'tshos_invoice_products',
+      retouren: process.env.BQ_TSHOS_TABLE_RETOUREN ?? 'tshos_retouren',
+      retourenProducts: process.env.BQ_TSHOS_TABLE_RETOUREN_PRODUCTS ?? 'tshos_retouren_products',
+      gutschrift: process.env.BQ_TSHOS_TABLE_GUTSCHRIFT ?? 'tshos_gutschrift',
+      gutschriftProducts: process.env.BQ_TSHOS_TABLE_GUTSCHRIFT_PRODUCTS ?? 'tshos_gutschrift_products',
+    },
+  },
+]
+
+// Produkte, Packingslip-Nummern etc. laufen für beide Shops über das gleiche,
+// geteilte Xanario-Shop-Dataset — kein Shop-Parameter nötig.
 const XANARIO_DATASET = process.env.BQ_XANARIO_DATASET ?? 'xanario_shop'
 const T_XANARIO_ORDERS = process.env.BQ_TABLE_XANARIO_ORDERS ?? 'shop_orders'
 const T_XANARIO_PACKINGSLIP = process.env.BQ_TABLE_XANARIO_PACKINGSLIP ?? 'shop_packingslip'
 
-function table(name: string) {
-  return `\`${PROJECT}.${DATASET}.${name}\``
+function table(shop: ShopConfig, name: string) {
+  return `\`${PROJECT}.${shop.dataset}.${name}\``
 }
 
 function xTable(name: string) {
@@ -103,7 +152,7 @@ function mapItem(item: BQItemRow, idx: number): OrderItem {
   }
 }
 
-function mapOrder(row: BQOrderRow, items: BQItemRow[], notInvoiced = false): Order {
+function mapOrder(row: BQOrderRow, items: BQItemRow[], source: ShopSource, notInvoiced = false): Order {
   let invoiceDate: string | undefined
   let invoiceDateWarning: boolean | undefined
   let invoiceDateDays: number | undefined
@@ -132,7 +181,7 @@ function mapOrder(row: BQOrderRow, items: BQItemRow[], notInvoiced = false): Ord
     invoiceDateWarning,
     invoiceDateDays,
     status: String(row.orders_status ?? ''),
-    source: 'ATLOS',
+    source,
     partnershop: isAmazon(row) ? 'amazon' : isEbay(row) ? 'ebay' : (row.partnershop ?? undefined),
     externOrderId: row.extern_orders_id ?? undefined,
     deliveryNoteNumber: row.packingslip_nr ?? undefined,
@@ -142,7 +191,7 @@ function mapOrder(row: BQOrderRow, items: BQItemRow[], notInvoiced = false): Ord
 }
 
 // Fetches invoice_products for a set of orders_ids, with separate resilient Retoure/Gutschrift lookup
-async function fetchItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]> {
+async function fetchItems(bq: BigQuery, shop: ShopConfig, orderIds: string[]): Promise<BQItemRow[]> {
   const placeholders = orderIds.map((_, i) => `@id${i}`).join(',')
   const itemParams: Record<string, string> = {}
   orderIds.forEach((id, i) => { itemParams[`id${i}`] = id })
@@ -159,27 +208,27 @@ async function fetchItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]
       ip.final_price,
       ip.products_quantity,
       p.products_image
-    FROM ${table(T_INVOICE_PRODUCTS)} ip
-    JOIN ${table(T_INVOICE)} inv ON ip.invoice_id = inv.invoice_id
+    FROM ${table(shop, shop.tables.invoiceProducts)} ip
+    JOIN ${table(shop, shop.tables.invoice)} inv ON ip.invoice_id = inv.invoice_id
     LEFT JOIN (
       SELECT products_id, ANY_VALUE(products_image) AS products_image
-      FROM ${table(T_PRODUCTS)} GROUP BY products_id
+      FROM ${table(shop, shop.tables.products)} GROUP BY products_id
     ) p ON ip.products_id = p.products_id
     WHERE inv.orders_id IN (${placeholders})
   `
   const retSql = `
     SELECT rp.products_id, inv2.orders_id, ANY_VALUE(r.retouren_nr) AS retouren_nr
-    FROM ${table(T_RETOUREN_PRODUCTS)} rp
-    JOIN ${table(T_RETOUREN)} r ON rp.retouren_id = r.retouren_id
-    JOIN ${table(T_INVOICE)} inv2 ON r.invoice_id = inv2.invoice_id
+    FROM ${table(shop, shop.tables.retourenProducts)} rp
+    JOIN ${table(shop, shop.tables.retouren)} r ON rp.retouren_id = r.retouren_id
+    JOIN ${table(shop, shop.tables.invoice)} inv2 ON r.invoice_id = inv2.invoice_id
     WHERE inv2.orders_id IN (${placeholders})
     GROUP BY rp.products_id, inv2.orders_id
   `
   const gutSql = `
     SELECT gp.products_id, inv2.orders_id, ANY_VALUE(g.gutschrift_nr) AS gutschrift_nr
-    FROM ${table(T_GUTSCHRIFT_PRODUCTS)} gp
-    JOIN ${table(T_GUTSCHRIFT)} g ON gp.gutschrift_id = g.gutschrift_id
-    JOIN ${table(T_INVOICE)} inv2 ON g.invoice_id = inv2.invoice_id
+    FROM ${table(shop, shop.tables.gutschriftProducts)} gp
+    JOIN ${table(shop, shop.tables.gutschrift)} g ON gp.gutschrift_id = g.gutschrift_id
+    JOIN ${table(shop, shop.tables.invoice)} inv2 ON g.invoice_id = inv2.invoice_id
     WHERE inv2.orders_id IN (${placeholders})
     GROUP BY gp.products_id, inv2.orders_id
   `
@@ -188,11 +237,11 @@ async function fetchItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]
   const [[rows], [retRows], [gutRows]] = await Promise.all([
     bq.query({ query: itemSql, params: itemParams }),
     bq.query({ query: retSql, params: itemParams }).catch((e) => {
-      console.error('Retouren-Lookup fehlgeschlagen (non-fatal):', e)
+      console.error(`Retouren-Lookup (${shop.source}) fehlgeschlagen (non-fatal):`, e)
       return emptyResult
     }),
     bq.query({ query: gutSql, params: itemParams }).catch((e) => {
-      console.error('Gutschrift-Lookup fehlgeschlagen (non-fatal):', e)
+      console.error(`Gutschrift-Lookup (${shop.source}) fehlgeschlagen (non-fatal):`, e)
       return emptyResult
     }),
   ])
@@ -222,7 +271,7 @@ async function fetchItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]
 // created/synced), so operators can still capture a return before the order
 // is invoiced. Retoure/Gutschrift columns stay null — those only exist once
 // the invoice has been generated.
-async function fetchOrderProductItems(bq: BigQuery, orderIds: string[]): Promise<BQItemRow[]> {
+async function fetchOrderProductItems(bq: BigQuery, shop: ShopConfig, orderIds: string[]): Promise<BQItemRow[]> {
   if (orderIds.length === 0) return []
   const placeholders = orderIds.map((_, i) => `@id${i}`).join(',')
   const params: Record<string, string> = {}
@@ -238,10 +287,10 @@ async function fetchOrderProductItems(bq: BigQuery, orderIds: string[]): Promise
       op.final_price,
       op.products_quantity,
       p.products_image
-    FROM ${table(T_ORDERS_PRODUCTS)} op
+    FROM ${table(shop, shop.tables.ordersProducts)} op
     LEFT JOIN (
       SELECT products_id, ANY_VALUE(products_image) AS products_image
-      FROM ${table(T_PRODUCTS)} GROUP BY products_id
+      FROM ${table(shop, shop.tables.products)} GROUP BY products_id
     ) p ON op.products_id = p.products_id
     WHERE op.orders_id IN (${placeholders})
   `
@@ -249,10 +298,11 @@ async function fetchOrderProductItems(bq: BigQuery, orderIds: string[]): Promise
   return rows as BQItemRow[]
 }
 
-export async function searchOrders(query: string): Promise<Order[]> {
-  const bq = getClient()
-  if (!bq) return []
+type ShopOrderRow = { row: BQOrderRow; items: BQItemRow[]; notInvoiced: boolean }
 
+// Läuft die komplette Order-Suche (inkl. Item-/Retouren-/Gutschrift-Auflösung
+// und orders_products-Fallback) für genau einen Shop.
+async function searchOrdersInShop(bq: BigQuery, shop: ShopConfig, query: string): Promise<ShopOrderRow[]> {
   const q = query.trim()
   const isNumeric = /^\d+$/.test(q)
   const qLike = `%${q}%`
@@ -273,15 +323,15 @@ export async function searchOrders(query: string): Promise<Order[]> {
       inv.orders_rechnungsdatum,
       inv.invoice_nr,
       pack.packingslip_nr
-    FROM ${table(T_ORDERS)} o
+    FROM ${table(shop, shop.tables.orders)} o
     LEFT JOIN (
       SELECT customers_id, ANY_VALUE(customers_nr) AS customers_nr
-      FROM ${table(T_CUSTOMERS)}
+      FROM ${table(shop, shop.tables.customers)}
       GROUP BY customers_id
     ) cust ON o.customers_id = cust.customers_id
     LEFT JOIN (
       SELECT orders_id, ANY_VALUE(orders_rechnungsdatum) AS orders_rechnungsdatum, ANY_VALUE(invoice_nr) AS invoice_nr
-      FROM ${table(T_INVOICE)}
+      FROM ${table(shop, shop.tables.invoice)}
       GROUP BY orders_id
     ) inv ON o.orders_id = inv.orders_id
     LEFT JOIN (
@@ -298,8 +348,8 @@ export async function searchOrders(query: string): Promise<Order[]> {
       inv.invoice_nr LIKE @qLike OR
       o.orders_id IN (
         SELECT DISTINCT inv2.orders_id
-        FROM ${table(T_RETOUREN)} r2
-        JOIN ${table(T_INVOICE)} inv2 ON r2.invoice_id = inv2.invoice_id
+        FROM ${table(shop, shop.tables.retouren)} r2
+        JOIN ${table(shop, shop.tables.invoice)} inv2 ON r2.invoice_id = inv2.invoice_id
         WHERE r2.retouren_nr LIKE @qLike
       ) OR
       o.bs_nr IN (
@@ -319,7 +369,7 @@ export async function searchOrders(query: string): Promise<Order[]> {
   if (!rows || rows.length === 0) return []
 
   const orderIds = (rows as BQOrderRow[]).map((r) => String(r.orders_id))
-  const itemRows = await fetchItems(bq, orderIds)
+  const itemRows = await fetchItems(bq, shop, orderIds)
 
   const itemsByOrder: Record<string, BQItemRow[]> = {}
   for (const item of itemRows as (BQItemRow & { orders_id: string | number })[]) {
@@ -329,12 +379,12 @@ export async function searchOrders(query: string): Promise<Order[]> {
   }
 
   // Fallback: Bestellungen ohne Rechnungspositionen (Rechnung noch nicht in BQ)
-  // aus atlos_orders_products befüllen, damit die Retoure trotzdem erfassbar ist.
+  // aus orders_products befüllen, damit die Retoure trotzdem erfassbar ist.
   const notInvoiced = new Set<string>()
   const missing = orderIds.filter((oid) => !itemsByOrder[oid]?.length)
   if (missing.length > 0) {
     try {
-      const fallbackRows = await fetchOrderProductItems(bq, missing)
+      const fallbackRows = await fetchOrderProductItems(bq, shop, missing)
       for (const item of fallbackRows as (BQItemRow & { orders_id: string | number })[]) {
         const oid = String(item.orders_id)
         if (!itemsByOrder[oid]) itemsByOrder[oid] = []
@@ -342,14 +392,44 @@ export async function searchOrders(query: string): Promise<Order[]> {
         notInvoiced.add(oid)
       }
     } catch (e) {
-      console.error('orders_products fallback failed (non-fatal):', e)
+      console.error(`orders_products fallback (${shop.source}) failed (non-fatal):`, e)
     }
   }
 
   return (rows as BQOrderRow[]).map((r) => {
     const oid = String(r.orders_id)
-    return mapOrder(r, itemsByOrder[oid] ?? [], notInvoiced.has(oid))
+    return { row: r, items: itemsByOrder[oid] ?? [], notInvoiced: notInvoiced.has(oid) }
   })
+}
+
+export async function searchOrders(query: string): Promise<Order[]> {
+  const bq = getClient()
+  if (!bq) return []
+
+  // Beide Shops parallel und unabhängig voneinander durchsuchen — schlägt ein
+  // Shop fehl (z.B. Dataset noch nicht angelegt/berechtigt), liefert der andere
+  // trotzdem Ergebnisse.
+  const perShop = await Promise.all(
+    SHOPS.map(async (shop) => {
+      try {
+        const rows = await searchOrdersInShop(bq, shop, query)
+        return rows.map((r) => ({ ...r, shop }))
+      } catch (e) {
+        console.error(`Suche im Shop ${shop.source} fehlgeschlagen (non-fatal):`, e)
+        return []
+      }
+    })
+  )
+
+  return perShop
+    .flat()
+    .sort((a, b) => {
+      const da = a.row.date_purchased ? new Date(a.row.date_purchased).getTime() : 0
+      const db = b.row.date_purchased ? new Date(b.row.date_purchased).getTime() : 0
+      return db - da
+    })
+    .slice(0, 20)
+    .map(({ row, items, notInvoiced, shop }) => mapOrder(row, items, shop.source, notInvoiced))
 }
 
 const T_XANARIO_PRODUCTS = process.env.BQ_TABLE_XANARIO_PRODUCTS ?? 'shop_products'

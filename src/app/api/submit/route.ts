@@ -184,7 +184,7 @@ export async function POST(request: Request) {
     const subtasks: { name: string; completed: boolean }[] = [
       { name: `Paket angenommen – von: ${operatorName}`, completed: true },
       hasExistingRetoure
-        ? { name: `Retoure angelegt (${retourenNr}) – von: ATLOS-Kunde`, completed: true }
+        ? { name: `Retoure angelegt (${retourenNr}) – von: ${source}-Kunde`, completed: true }
         : { name: 'Retoure angelegt – von: ___', completed: false },
       ...(hasErstattung ? [{ name: 'Gutschrift geschrieben – von: ___', completed: false }] : []),
       ...(hasUmtausch ? [{ name: 'Umtausch gemacht – von: ___', completed: false }] : []),
