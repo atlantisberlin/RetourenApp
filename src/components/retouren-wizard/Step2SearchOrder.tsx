@@ -82,6 +82,11 @@ export function Step2SearchOrder({
               <div>
                 <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
                   {selectedOrder.customerName}
+                  {(selectedOrder.source === 'ATLOS' || selectedOrder.source === 'TSHOS') && (
+                    <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, background: 'var(--surface-3)', color: 'var(--text-muted)', border: '1px solid var(--border-2)', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em' }}>
+                      {selectedOrder.source === 'TSHOS' ? 'TS' : 'AT'}
+                    </span>
+                  )}
                   {selectedOrder.partnershop === 'amazon' && (
                     <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, background: '#ff9900', color: '#000', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em' }}>AMAZON</span>
                   )}
@@ -149,6 +154,11 @@ export function Step2SearchOrder({
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                     <span style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 6 }}>
                       {order.customerName}
+                      {(order.source === 'ATLOS' || order.source === 'TSHOS') && (
+                        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, background: 'var(--surface-3)', color: 'var(--text-muted)', border: '1px solid var(--border-2)', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em' }}>
+                          {order.source === 'TSHOS' ? 'TS' : 'AT'}
+                        </span>
+                      )}
                       {order.partnershop === 'amazon' && (
                         <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, background: '#ff9900', color: '#000', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em' }}>AMAZON</span>
                       )}
