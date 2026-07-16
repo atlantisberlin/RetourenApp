@@ -30,7 +30,7 @@ export async function uploadPhotosToTask(
     // Slot-basierte Namen (etikett-1.jpg) wie beim früheren Server-Upload
     const label = photo.type ? `${photo.type}-${i + 1}.jpg` : (photo.name || `foto-${i + 1}.jpg`)
     try {
-      const blob = await dataUrlToBlob(photo.dataUrl)
+      const blob = dataUrlToBlob(photo.dataUrl)
       const formData = new FormData()
       formData.append('taskGid', taskGid)
       formData.append('name', label)
@@ -61,7 +61,23 @@ export async function uploadPhotosToTask(
   return result
 }
 
-async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
-  const res = await fetch(dataUrl)
-  return res.blob()
+// Wandelt eine data:-URL direkt in einen Blob um, ohne fetch() zu benutzen.
+// fetch(dataUrl) fällt unter die CSP-Regel "connect-src" — die erlaubt nur
+// 'self', kein data:. Manche Browser setzen das strikt durch (Fetch schlägt
+// mit "Failed to fetch" fehl, ganz ohne Server-Kontakt und ohne Log-Eintrag),
+// andere sind da nachsichtiger — daher lief der Upload am Computer, aber
+// nicht auf dem Tablet. Reines String-Parsen umgeht das Problem komplett.
+function dataUrlToBlob(dataUrl: string): Blob {
+  const commaIndex = dataUrl.indexOf(',')
+  const header = dataUrl.slice(0, commaIndex)
+  const base64 = dataUrl.slice(commaIndex + 1)
+  const mimeMatch = header.match(/^data:([^;]+);base64$/)
+  const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream'
+
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return new Blob([bytes], { type: mime })
 }
