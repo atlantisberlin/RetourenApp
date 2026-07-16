@@ -52,7 +52,9 @@ export const OrderItemSchema = z.object({
   productId: z.string().max(50),
   sku: z.string().max(100).nullish(),
   quantity: z.number().int().min(1),
-  price: z.number().min(0),
+  // Kein .min(0): BigQuery liefert für Rabatt-/Gutschrift-Positionen
+  // negative final_price-Werte — das ist gültige Bestelldaten, kein Fehler
+  price: z.number(),
   // BigQuery liefert für fehlende Felder null; imageUrl kann zudem
   // Dateinamen mit Leer-/Sonderzeichen enthalten, daher kein strenges url()
   imageUrl: z.string().max(500).nullish(),
