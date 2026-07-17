@@ -64,7 +64,7 @@ Full details in `SECURITY_PLAN.md`
 ## 🟠 HIGH - Week 2
 
 ### Rate Limiting — ✅ DONE (2026-07-13), in-memory instead of Upstash/Redis
-Implemented in `src/lib/rate-limit.ts` + applied centrally in `src/middleware.ts`
+Implemented in `src/lib/rate-limit.ts` + applied centrally in `src/proxy.ts`
 (one place for all routes, not per-endpoint code). No external Redis/Upstash
 dependency — deliberately simple, since [`SELFHOSTING_PLAN.md`](SELFHOSTING_PLAN.md)
 moves this app to a single self-hosted Node process, where in-memory state is
@@ -95,13 +95,13 @@ application code.
 - [x] Log search queries — **result count only, not the raw query text**
       (the query can itself be a customer's name — kept out of logs)
 - [x] Log failed authentication attempts (login, device unlock, rate-limit
-      rejections, device-gate rejections in `src/middleware.ts`)
+      rejections, device-gate rejections in `src/proxy.ts`)
 - [ ] 90-day retention policy — set this at the hosting-platform level once
       deployed (Vercel log retention setting, or Docker log-rotation config
       on the self-hosted server), not in this repo
 
 ### HTTPS Enforcement — ✅ DONE (2026-07-13)
-- [x] Redirect HTTP to HTTPS — added as defense-in-depth in `src/middleware.ts`
+- [x] Redirect HTTP to HTTPS — added as defense-in-depth in `src/proxy.ts`
       (production only, checks `x-forwarded-proto`). Vercel and the planned
       Coolify/Traefik setup already enforce this at the proxy level; this is
       a backstop, not the primary defense.

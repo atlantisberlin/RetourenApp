@@ -154,7 +154,7 @@ curl -I http://localhost:3000/
 
 #### 6. **Implement No-Auth Route Check** — ✅ DONE (2026-07-13)
 
-- [x] Device-gate middleware (`src/middleware.ts`) now blocks every route
+- [x] Device-gate middleware (`src/proxy.ts`) now blocks every route
       (pages + API) by default unless a valid device cookie is present —
       a structural backstop, not just per-route checks
 - [x] Document which routes have operator-session auth:
@@ -197,7 +197,7 @@ const secret = new TextEncoder().encode(JWT_SECRET || 'dev-only-insecure-key')
 
 **Chosen approach:** Neither Vercel's built-in config nor Upstash Redis — a
 small in-memory fixed-window limiter (`src/lib/rate-limit.ts`), applied
-centrally in `src/middleware.ts` for every `/api/*` request instead of
+centrally in `src/proxy.ts` for every `/api/*` request instead of
 per-route code. Reasoning: this app is moving to a single self-hosted Node
 process ([`SELFHOSTING_PLAN.md`](SELFHOSTING_PLAN.md)), where in-memory state
 is fully reliable — paying for/operating Upstash Redis for that end state
@@ -260,7 +260,7 @@ doesn't use cookie-based auth for state-changing operator actions:
 
 **Chosen approach:** `src/lib/audit-log.ts` — one structured JSON line per
 event via `console.log`/`console.warn`, no logging package. Reasoning: Pino
-needs Node APIs unavailable in the Edge runtime that `src/middleware.ts`
+needs Node APIs unavailable in the Edge runtime that `src/proxy.ts`
 runs on, which would have forced two different logging mechanisms (Pino in
 Node route handlers, something else in Edge middleware) for no real benefit
 at this app's scale. Both Vercel today and Coolify/Docker later already
@@ -277,7 +277,7 @@ place to configure **90-day retention**, not application code.
       query text, since it can itself be a customer's name)
 - [x] Failed authentication attempts (login/device-unlock failures, plus
       rate-limit rejections and device-gate rejections logged in
-      `src/middleware.ts`)
+      `src/proxy.ts`)
 - [ ] User logout — not logged (stateless JWT, logout has no server-side
       effect to audit beyond the client clearing its own token)
 
@@ -311,7 +311,7 @@ self-hosted), not enforceable from this repo.
 
 ### 12. **Implement HTTPS Enforcement** — ✅ DONE (2026-07-13)
 
-- [x] Add redirect middleware: HTTP → HTTPS — added in `src/middleware.ts`,
+- [x] Add redirect middleware: HTTP → HTTPS — added in `src/proxy.ts`,
       production-only, based on `x-forwarded-proto`. This is a backstop:
       Vercel and the planned Coolify/Traefik setup already redirect at the
       proxy level before a request even reaches this app.

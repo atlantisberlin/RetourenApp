@@ -29,7 +29,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // headers() lesen zwingt Next.js, diese Seite bei jeder Anfrage neu
   // (dynamisch) zu rendern statt sie einmalig beim Build statisch zu
   // erzeugen — nur dann bekommen Next.js' eigene Inline-Skripte das von
-  // middleware.ts pro Anfrage gesetzte CSP-Nonce eingebettet.
+  // proxy.ts pro Anfrage gesetzte CSP-Nonce eingebettet.
   await headers()
 
   return (

@@ -16,8 +16,8 @@ export default function DeviceLoginScreen() {
     setError(null)
     try {
       await unlockDevice(code.trim())
-      // Volle Navigation statt Router-Push: die Middleware muss das frisch
-      // gesetzte Cookie beim nächsten Request sehen
+      // Volle Navigation statt Router-Push: die Proxy-Funktion (proxy.ts)
+      // muss das frisch gesetzte Cookie beim nächsten Request sehen
       window.location.href = '/'
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Anmeldung fehlgeschlagen')

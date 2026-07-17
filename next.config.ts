@@ -3,10 +3,10 @@ import type { NextConfig } from "next";
 const isProd = process.env.NODE_ENV === 'production'
 
 // Content-Security-Policy wird NICHT hier gesetzt, sondern pro Anfrage in
-// middleware.ts — sie braucht ein zufälliges Nonce, damit Next.js' eigene
+// proxy.ts — sie braucht ein zufälliges Nonce, damit Next.js' eigene
 // (für Hydration/Streaming nötige) Inline-Skripte laufen dürfen, ohne
 // Inline-Skripte pauschal zu erlauben. Ein hier zusätzlich gesetzter
-// statischer CSP-Header ohne Nonce würde sich mit dem aus der Middleware
+// statischer CSP-Header ohne Nonce würde sich mit dem aus dem Proxy
 // überschneiden und dessen Nonce-Erlaubnis wieder aufheben (Browser wenden
 // mehrere CSP-Header als Schnittmenge an).
 const securityHeaders = [
@@ -29,11 +29,9 @@ if (isProd) {
 
 const nextConfig: NextConfig = {
   // Schlankes, eigenständiges Server-Bundle für Docker-Deploys (Coolify o.ä.).
-  // NUR dort setzen: Vercel hat eine eigene Build-/Trace-Pipeline, die sich
-  // mit 'standalone' beißt (führt zu MIDDLEWARE_INVOCATION_FAILED /
-  // EnvFileReadError, weil die Middleware dann eine Env-Datei erwartet, die
-  // im Vercel-Runtime-Layout gar nicht existiert). process.env.VERCEL wird
-  // von Vercel selbst automatisch gesetzt (Build & Runtime).
+  // NUR dort setzen: Vercel hat eine eigene Build-/Trace-Pipeline und braucht
+  // (empfiehlt sogar ausdrücklich, kein) 'standalone' — process.env.VERCEL
+  // wird von Vercel selbst automatisch gesetzt (Build & Runtime).
   ...(process.env.VERCEL ? {} : { output: 'standalone' as const }),
   images: {
     remotePatterns: [
