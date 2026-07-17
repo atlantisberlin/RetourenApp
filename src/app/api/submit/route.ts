@@ -51,6 +51,11 @@ export async function POST(request: Request) {
   const source = body.order.source ?? 'Atlantis'
 
   const returnedItems = body.items.filter((i) => i.returned)
+  // Reklamierte Artikel laufen komplett über den separaten Reklamations-Task
+  // (siehe unten) — ihre eigentliche Lösung (Erstattung/Umtausch) hängt vom
+  // Hersteller ab und steht hier noch nicht fest, daher zählen sie nicht für
+  // die Erstattung/Umtausch-Tags bzw. -Unteraufgaben der Haupt-Retoure.
+  const nonReklamationItems = returnedItems.filter((i) => !i.reklamation)
 
   // Retourennummer: vom Kunden im Shop selbst angelegt (existingRetoure an den
   // zurückgesendeten Positionen), sonst Platzhalter zum Nachtragen.
@@ -114,16 +119,16 @@ export async function POST(request: Request) {
     ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
     ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
     ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
-    ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
-    ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
+    ...(nonReklamationItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
+    ...(nonReklamationItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
   ])
 
   const tags = [
     ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
     ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
     ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
-    ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
-    ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
+    ...(nonReklamationItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
+    ...(nonReklamationItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
   ]
 
   async function createTask(payload: object): Promise<Response> {
@@ -164,8 +169,8 @@ export async function POST(request: Request) {
 
   // Unteraufgaben als Workflow-Checkliste
   if (taskGid) {
-    const hasErstattung = returnedItems.some((i) => i.resolution === 'erstattung')
-    const hasUmtausch = returnedItems.some((i) => i.resolution === 'umtausch')
+    const hasErstattung = nonReklamationItems.some((i) => i.resolution === 'erstattung')
+    const hasUmtausch = nonReklamationItems.some((i) => i.resolution === 'umtausch')
 
     const subtasks: { name: string; completed: boolean }[] = [
       { name: `Paket angenommen – von: ${operatorName}`, completed: true },
@@ -223,8 +228,17 @@ export async function POST(request: Request) {
         reklamationPdfBase64 = pdfBuffer.toString('base64')
 
         const reklamationTitle = `Reklamation (${body.order.orderNumber}) - ${body.order.customerName} - ${date}`
-        const reklamationNotes = `<body><p>Zugehörige Retoure: <a href="https://app.asana.com/0/0/${taskGid}/f">Task öffnen</a></p></body>`
-        const reklaRes = await createTask({ data: { name: reklamationTitle, html_notes: reklamationNotes, projects: [reklamationProjectGid] } })
+        // Kein <a href>: Asanas html_notes unterstützt keine beliebigen
+        // Hyperlink-Tags (führte zu xml_parsing_error) — Asana verlinkt eine
+        // im Text enthaltene URL automatisch.
+        const reklamationNotes = `<body><p>Zugehörige Retoure: https://app.asana.com/0/0/${taskGid}/f</p></body>`
+        let reklaRes = await createTask({ data: { name: reklamationTitle, html_notes: reklamationNotes, projects: [reklamationProjectGid] } })
+
+        if (reklaRes.status === 400) {
+          console.error('Asana lehnte Reklamations-html_notes ab (400), Fallback auf Plain-Text.')
+          const plainNotes = `Zugehörige Retoure: https://app.asana.com/0/0/${taskGid}/f`
+          reklaRes = await createTask({ data: { name: reklamationTitle, notes: plainNotes, projects: [reklamationProjectGid] } })
+        }
 
         if (reklaRes.ok) {
           const reklaData = await reklaRes.json()
