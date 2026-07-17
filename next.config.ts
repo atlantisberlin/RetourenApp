@@ -28,8 +28,13 @@ if (isProd) {
 }
 
 const nextConfig: NextConfig = {
-  // Schlankes, eigenständiges Server-Bundle für Docker-Deploys (Coolify o.ä.)
-  output: 'standalone',
+  // Schlankes, eigenständiges Server-Bundle für Docker-Deploys (Coolify o.ä.).
+  // NUR dort setzen: Vercel hat eine eigene Build-/Trace-Pipeline, die sich
+  // mit 'standalone' beißt (führt zu MIDDLEWARE_INVOCATION_FAILED /
+  // EnvFileReadError, weil die Middleware dann eine Env-Datei erwartet, die
+  // im Vercel-Runtime-Layout gar nicht existiert). process.env.VERCEL wird
+  // von Vercel selbst automatisch gesetzt (Build & Runtime).
+  ...(process.env.VERCEL ? {} : { output: 'standalone' as const }),
   images: {
     remotePatterns: [
       {
