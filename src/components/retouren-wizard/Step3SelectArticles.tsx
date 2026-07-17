@@ -39,12 +39,13 @@ export function Step3SelectArticles({
           <ArticleRow
             key={art.itemId}
             article={art}
-            onToggleReturned={(val) => onUpdateArticle(idx, val ? { returned: true } : { returned: false, returnedQuantity: null, condition: null, reason: null, resolution: null, replacementProduct: null, photos: [] })}
+            onToggleReturned={(val) => onUpdateArticle(idx, val ? { returned: true } : { returned: false, returnedQuantity: null, condition: null, reason: null, resolution: null, replacementProduct: null, photos: [], reklamation: false })}
             onQuantity={(val) => onUpdateArticle(idx, { returnedQuantity: val })}
-            onCondition={(val) => onUpdateArticle(idx, { condition: val })}
+            onCondition={(val) => onUpdateArticle(idx, val === 'gut' ? { condition: val, reklamation: false } : { condition: val })}
             onReason={(val) => onUpdateArticle(idx, { reason: val })}
             onResolution={(val) => onUpdateArticle(idx, { resolution: val })}
             onReplacementProduct={(val) => onUpdateArticle(idx, { replacementProduct: val })}
+            onReklamation={(val) => onUpdateArticle(idx, { reklamation: val })}
             onCapturePhoto={() => onCapturePhoto(idx)}
             onRemovePhoto={(photoId) => onRemovePhoto(idx, photoId)}
           />

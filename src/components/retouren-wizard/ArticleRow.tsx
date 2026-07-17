@@ -22,6 +22,7 @@ export type ArticleCapture = {
   photos: Photo[]
   existingRetoure?: string | null
   existingGutschrift?: string | null
+  reklamation: boolean
 }
 
 const CONDITIONS: { value: ReturnCondition; label: string }[] = [
@@ -48,11 +49,12 @@ type ArticleRowProps = {
   onReason: (val: string) => void
   onResolution: (val: 'erstattung' | 'umtausch') => void
   onReplacementProduct: (val: ReplacementProduct | null) => void
+  onReklamation: (val: boolean) => void
   onCapturePhoto: () => void
   onRemovePhoto: (photoId: string) => void
 }
 
-export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition, onReason, onResolution, onReplacementProduct, onCapturePhoto, onRemovePhoto }: ArticleRowProps) {
+export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition, onReason, onResolution, onReplacementProduct, onReklamation, onCapturePhoto, onRemovePhoto }: ArticleRowProps) {
   const [productQuery, setProductQuery] = React.useState('')
   const [productResults, setProductResults] = React.useState<ReplacementProduct[]>([])
   const [productSearching, setProductSearching] = React.useState(false)
@@ -207,6 +209,39 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
               {CONDITIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
           </div>
+
+          {/* Reklamation */}
+          {article.condition && article.condition !== 'gut' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', width: 56, flexShrink: 0 }}>REKLA</span>
+              <div style={{ display: 'flex', gap: 6, flex: 1 }}>
+                <button
+                  onClick={() => onReklamation(true)}
+                  style={{
+                    flex: 1, padding: '7px 10px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    border: `1.5px solid ${article.reklamation ? 'var(--blue)' : 'var(--border)'}`,
+                    background: article.reklamation ? 'var(--blue)' : 'var(--surface)',
+                    color: article.reklamation ? 'white' : 'var(--text-3)',
+                    transition: 'all 0.12s',
+                  }}
+                >
+                  Ja
+                </button>
+                <button
+                  onClick={() => onReklamation(false)}
+                  style={{
+                    flex: 1, padding: '7px 10px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    border: `1.5px solid ${!article.reklamation ? 'var(--surface-3)' : 'var(--border)'}`,
+                    background: !article.reklamation ? 'var(--surface-3)' : 'var(--surface)',
+                    color: !article.reklamation ? 'var(--text-2)' : 'var(--text-muted)',
+                    transition: 'all 0.12s',
+                  }}
+                >
+                  Nein
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Grund */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

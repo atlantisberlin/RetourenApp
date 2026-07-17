@@ -60,6 +60,7 @@ export type ReturnItemCapture = {
   resolution: ReturnResolution
   notes: string
   replacementProduct?: ReplacementProduct | null
+  reklamation: boolean
 }
 
 export type ReturnCapture = {

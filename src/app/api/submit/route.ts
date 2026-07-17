@@ -5,23 +5,9 @@ import { auditLog } from '@/lib/audit-log'
 import { getClientIp } from '@/lib/rate-limit'
 import { formatRelativeDays } from '@/lib/format'
 import { escapeHtmlContent } from '@/lib/asana-format'
+import { conditionLabel, reasonLabel } from '@/lib/return-labels'
+import { renderReklamationPdf } from '@/lib/reklamation-pdf'
 import { z } from 'zod'
-
-const conditionLabel: Record<string, string> = {
-  gut: 'Gut',
-  beschaedigt: 'Beschädigt',
-  unvollstaendig: 'Unvollständig',
-  defekt: 'Defekt',
-}
-
-const reasonLabel: Record<string, string> = {
-  gefaellt_nicht: 'Gefällt nicht',
-  falsch_geliefert: 'Falsch geliefert',
-  defekt_bei_ankunft: 'Defekt bei Ankunft',
-  groesse_passt_nicht: 'Größe passt nicht',
-  beschaedigt_bei_lieferung: 'Beschädigt bei Lieferung',
-  sonstiges: 'Sonstiges',
-}
 
 export async function POST(request: Request) {
   const ip = getClientIp(request)
@@ -207,6 +193,75 @@ export async function POST(request: Request) {
     }))
   }
 
+  // Reklamation: zusätzlicher Task im separaten Reklamations-Projekt mit
+  // angehängtem Reklamationsschein-PDF (ersetzt den bisherigen manuellen
+  // WordPress-Ablauf). Nicht-fatal — ein Fehler hier darf die eigentliche
+  // Retoure nicht blockieren, die Aufgabe oben ist bereits angelegt.
+  let reklamationPdfBase64: string | undefined
+  const reklamationItems = returnedItems.filter((i) => i.reklamation)
+  if (taskGid && reklamationItems.length > 0) {
+    try {
+      const reklamationProjectGid = process.env.ASANA_REKLAMATION_PROJECT_GID?.trim()
+      if (!reklamationProjectGid) {
+        console.error('Reklamation nicht angelegt: ASANA_REKLAMATION_PROJECT_GID fehlt')
+      } else {
+        const pdfItems = reklamationItems.map((item) => {
+          const orderItem = body.order.items.find((oi) => oi.id === item.itemId)
+          return {
+            productName: orderItem?.productName ?? item.itemId,
+            sku: orderItem?.sku,
+            condition: item.condition,
+            reason: item.reason,
+          }
+        })
+        const pdfBuffer = await renderReklamationPdf({
+          order: { ...body.order, customerEmail: body.order.customerEmail ?? '' },
+          items: pdfItems,
+          operatorName,
+          notes: body.notes,
+        })
+        reklamationPdfBase64 = pdfBuffer.toString('base64')
+
+        const reklamationTitle = `Reklamation (${body.order.orderNumber}) - ${body.order.customerName} - ${date}`
+        const reklamationNotes = `<body><p>Zugehörige Retoure: <a href="https://app.asana.com/0/0/${taskGid}/f">Task öffnen</a></p></body>`
+        const reklaRes = await createTask({ data: { name: reklamationTitle, html_notes: reklamationNotes, projects: [reklamationProjectGid] } })
+
+        if (reklaRes.ok) {
+          const reklaData = await reklaRes.json()
+          const reklamationTaskGid = reklaData.data?.gid
+          if (reklamationTaskGid) {
+            const asanaForm = new FormData()
+            asanaForm.append('file', new Blob([new Uint8Array(pdfBuffer)], { type: 'application/pdf' }), `Reklamation-${body.order.orderNumber}.pdf`)
+            const attachRes = await fetch(`https://app.asana.com/api/1.0/tasks/${reklamationTaskGid}/attachments`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${asanaToken}` },
+              body: asanaForm,
+            })
+            if (!attachRes.ok) {
+              console.error('Reklamations-PDF-Upload fehlgeschlagen:', await attachRes.text())
+            }
+
+            await fetch('https://app.asana.com/api/1.0/tasks', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${asanaToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                data: {
+                  name: `Reklamation eingereicht: https://app.asana.com/0/0/${reklamationTaskGid}/f`,
+                  completed: false,
+                  parent: taskGid,
+                },
+              }),
+            }).catch((err) => console.error('Reklamations-Hinweis-Subtask fehlgeschlagen:', err))
+          }
+        } else {
+          console.error('Reklamations-Task fehlgeschlagen:', await reklaRes.text())
+        }
+      }
+    } catch (err) {
+      console.error('Reklamation fehlgeschlagen (non-fatal):', err)
+    }
+  }
+
     auditLog({
       event: 'submit',
       status: 'success',
@@ -217,7 +272,7 @@ export async function POST(request: Request) {
       retourenNr: hasExistingRetoure ? retourenNr : null,
       invoiceOverdue: !!body.order.invoiceDateWarning,
     })
-    return apiJson(successResponse({ taskId: taskGid }))
+    return apiJson(successResponse({ taskId: taskGid, reklamationPdf: reklamationPdfBase64 }))
   } catch (error) {
     if (error instanceof z.ZodError) {
       auditLog({ event: 'submit', status: 'failure', ip, reason: 'invalid_input' })

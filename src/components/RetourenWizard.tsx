@@ -108,13 +108,14 @@ export default function RetourenWizard() {
       photos: [] as Photo[],
       existingRetoure: item.existingRetoure ?? null,
       existingGutschrift: item.existingGutschrift ?? null,
+      reklamation: false,
     }))
     if (pendingArticlesRef.current) {
       const saved = pendingArticlesRef.current
       pendingArticlesRef.current = null
       setArticles(rebuilt.map(a => {
         const s = saved.find(x => x.itemId === a.itemId)
-        return s ? { ...a, returned: s.returned, condition: s.condition, reason: s.reason } : a
+        return s ? { ...a, returned: s.returned, condition: s.condition, reason: s.reason, reklamation: s.reklamation ?? false } : a
       }))
     } else {
       setArticles(rebuilt)
@@ -235,6 +236,7 @@ export default function RetourenWizard() {
           resolution: (a.resolution ?? 'erstattung') as ReturnResolution,
           notes: '',
           replacementProduct: a.replacementProduct ?? null,
+          reklamation: a.reklamation === true,
         })),
         trackingNumber: trackingNumber.trim(),
         packageService: '',
@@ -242,12 +244,25 @@ export default function RetourenWizard() {
         operatorName: operator ?? 'Unbekannt',
         dhlReturn: isDhlReturn === true,
       }
-      const response = await apiPost<{ taskId: string }>('/api/submit', body)
-      const resp = response as ApiResponse<{ taskId: string }>
+      const response = await apiPost<{ taskId: string; reklamationPdf?: string }>('/api/submit', body)
+      const resp = response as ApiResponse<{ taskId: string; reklamationPdf?: string }>
       if (!resp.success) {
         throw new Error(resp.error || 'Submission failed')
       }
       const data = resp.data
+
+      // Reklamationsschein zum sofortigen Ausdrucken in neuem Tab öffnen
+      if (data.reklamationPdf) {
+        try {
+          const byteChars = atob(data.reklamationPdf)
+          const byteNumbers = new Array(byteChars.length)
+          for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i)
+          const blob = new Blob([new Uint8Array(byteNumbers)], { type: 'application/pdf' })
+          window.open(URL.createObjectURL(blob), '_blank')
+        } catch (err) {
+          console.error('Reklamations-PDF konnte nicht geöffnet werden:', err)
+        }
+      }
 
       // Fotos einzeln zur angelegten Asana-Aufgabe hochladen
       const photos = [

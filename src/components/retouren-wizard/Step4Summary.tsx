@@ -101,6 +101,29 @@ export function Step4Summary({
         </div>
       )}
 
+      {/* Reklamations-Hinweis */}
+      {articles.some(a => a.returned === true && a.reklamation) && (
+        <div style={{
+          marginBottom: 20,
+          padding: '12px 16px',
+          borderRadius: 10,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          background: '#fff7ed',
+          border: '1px solid #fed7aa',
+        }}>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0 }}>
+            <path d="M9 2L1.5 15.5h15L9 2z" stroke="#ea580c" strokeWidth="1.5" strokeLinejoin="round"/>
+            <path d="M9 7v4" stroke="#ea580c" strokeWidth="1.5" strokeLinecap="round"/>
+            <circle cx="9" cy="13" r="0.75" fill="#ea580c"/>
+          </svg>
+          <span style={{ fontSize: 13, color: '#9a3412' }}>
+            Dies ist eine Reklamation, bitte den Zettel ausdrucken und alles in die Coppi-Box packen.
+          </span>
+        </div>
+      )}
+
       {/* Returned articles detail */}
       {articles.filter(a => a.returned === true).length > 0 && (
         <div style={{ marginBottom: 20 }}>
@@ -116,6 +139,11 @@ export function Step4Summary({
                   <span style={{ fontSize: 11, background: 'var(--blue-bg)', border: '1px solid var(--blue-border)', borderRadius: 4, padding: '2px 6px', color: 'var(--blue)' }}>
                     {REASONS.find(r => r.value === a.reason)?.label}
                   </span>
+                  {a.reklamation && (
+                    <span style={{ fontSize: 11, fontWeight: 700, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 4, padding: '2px 6px', color: '#9a3412' }}>
+                      REKLA
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
