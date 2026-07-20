@@ -5,9 +5,23 @@ import { auditLog } from '@/lib/audit-log'
 import { getClientIp } from '@/lib/rate-limit'
 import { formatRelativeDays } from '@/lib/format'
 import { escapeHtmlContent } from '@/lib/asana-format'
-import { conditionLabel, reasonLabel } from '@/lib/return-labels'
-import { renderReklamationPdf } from '@/lib/reklamation-pdf'
 import { z } from 'zod'
+
+const conditionLabel: Record<string, string> = {
+  gut: 'Gut',
+  beschaedigt: 'Beschädigt',
+  unvollstaendig: 'Unvollständig',
+  defekt: 'Defekt',
+}
+
+const reasonLabel: Record<string, string> = {
+  gefaellt_nicht: 'Gefällt nicht',
+  falsch_geliefert: 'Falsch geliefert',
+  defekt_bei_ankunft: 'Defekt bei Ankunft',
+  groesse_passt_nicht: 'Größe passt nicht',
+  beschaedigt_bei_lieferung: 'Beschädigt bei Lieferung',
+  sonstiges: 'Sonstiges',
+}
 
 export async function POST(request: Request) {
   const ip = getClientIp(request)
@@ -51,11 +65,6 @@ export async function POST(request: Request) {
   const source = body.order.source ?? 'Atlantis'
 
   const returnedItems = body.items.filter((i) => i.returned)
-  // Reklamierte Artikel laufen komplett über den separaten Reklamations-Task
-  // (siehe unten) — ihre eigentliche Lösung (Erstattung/Umtausch) hängt vom
-  // Hersteller ab und steht hier noch nicht fest, daher zählen sie nicht für
-  // die Erstattung/Umtausch-Tags bzw. -Unteraufgaben der Haupt-Retoure.
-  const nonReklamationItems = returnedItems.filter((i) => !i.reklamation)
 
   // Retourennummer: vom Kunden im Shop selbst angelegt (existingRetoure an den
   // zurückgesendeten Positionen), sonst Platzhalter zum Nachtragen.
@@ -119,16 +128,16 @@ export async function POST(request: Request) {
     ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
     ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
     ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
-    ...(nonReklamationItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
-    ...(nonReklamationItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
+    ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
+    ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
   ])
 
   const tags = [
     ...(body.dhlReturn && dhlTagGid ? [dhlTagGid] : []),
     ...(body.order.partnershop === 'amazon' ? [amazonTagGid] : []),
     ...(body.order.partnershop === 'ebay' ? [ebayTagGid] : []),
-    ...(nonReklamationItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
-    ...(nonReklamationItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
+    ...(returnedItems.some(i => i.resolution === 'erstattung') ? [erstattungTagGid] : []),
+    ...(returnedItems.some(i => i.resolution === 'umtausch') ? [umtauschTagGid] : []),
   ]
 
   async function createTask(payload: object): Promise<Response> {
@@ -169,8 +178,8 @@ export async function POST(request: Request) {
 
   // Unteraufgaben als Workflow-Checkliste
   if (taskGid) {
-    const hasErstattung = nonReklamationItems.some((i) => i.resolution === 'erstattung')
-    const hasUmtausch = nonReklamationItems.some((i) => i.resolution === 'umtausch')
+    const hasErstattung = returnedItems.some((i) => i.resolution === 'erstattung')
+    const hasUmtausch = returnedItems.some((i) => i.resolution === 'umtausch')
 
     const subtasks: { name: string; completed: boolean }[] = [
       { name: `Paket angenommen – von: ${operatorName}`, completed: true },
@@ -198,84 +207,6 @@ export async function POST(request: Request) {
     }))
   }
 
-  // Reklamation: zusätzlicher Task im separaten Reklamations-Projekt mit
-  // angehängtem Reklamationsschein-PDF (ersetzt den bisherigen manuellen
-  // WordPress-Ablauf). Nicht-fatal — ein Fehler hier darf die eigentliche
-  // Retoure nicht blockieren, die Aufgabe oben ist bereits angelegt.
-  let reklamationPdfBase64: string | undefined
-  const reklamationItems = returnedItems.filter((i) => i.reklamation)
-  if (taskGid && reklamationItems.length > 0) {
-    try {
-      const reklamationProjectGid = process.env.ASANA_REKLAMATION_PROJECT_GID?.trim()
-      if (!reklamationProjectGid) {
-        console.error('Reklamation nicht angelegt: ASANA_REKLAMATION_PROJECT_GID fehlt')
-      } else {
-        const pdfItems = reklamationItems.map((item) => {
-          const orderItem = body.order.items.find((oi) => oi.id === item.itemId)
-          return {
-            productName: orderItem?.productName ?? item.itemId,
-            sku: orderItem?.sku,
-            condition: item.condition,
-            reason: item.reason,
-          }
-        })
-        const pdfBuffer = await renderReklamationPdf({
-          order: { ...body.order, customerEmail: body.order.customerEmail ?? '' },
-          items: pdfItems,
-          operatorName,
-          notes: body.notes,
-        })
-        reklamationPdfBase64 = pdfBuffer.toString('base64')
-
-        const reklamationTitle = `Reklamation (${body.order.orderNumber}) - ${body.order.customerName} - ${date}`
-        // Kein <a href>: Asanas html_notes unterstützt keine beliebigen
-        // Hyperlink-Tags (führte zu xml_parsing_error) — Asana verlinkt eine
-        // im Text enthaltene URL automatisch.
-        const reklamationNotes = `<body><p>Zugehörige Retoure: https://app.asana.com/0/0/${taskGid}/f</p></body>`
-        let reklaRes = await createTask({ data: { name: reklamationTitle, html_notes: reklamationNotes, projects: [reklamationProjectGid] } })
-
-        if (reklaRes.status === 400) {
-          console.error('Asana lehnte Reklamations-html_notes ab (400), Fallback auf Plain-Text.')
-          const plainNotes = `Zugehörige Retoure: https://app.asana.com/0/0/${taskGid}/f`
-          reklaRes = await createTask({ data: { name: reklamationTitle, notes: plainNotes, projects: [reklamationProjectGid] } })
-        }
-
-        if (reklaRes.ok) {
-          const reklaData = await reklaRes.json()
-          const reklamationTaskGid = reklaData.data?.gid
-          if (reklamationTaskGid) {
-            const asanaForm = new FormData()
-            asanaForm.append('file', new Blob([new Uint8Array(pdfBuffer)], { type: 'application/pdf' }), `Reklamation-${body.order.orderNumber}.pdf`)
-            const attachRes = await fetch(`https://app.asana.com/api/1.0/tasks/${reklamationTaskGid}/attachments`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${asanaToken}` },
-              body: asanaForm,
-            })
-            if (!attachRes.ok) {
-              console.error('Reklamations-PDF-Upload fehlgeschlagen:', await attachRes.text())
-            }
-
-            await fetch('https://app.asana.com/api/1.0/tasks', {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${asanaToken}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                data: {
-                  name: `Reklamation eingereicht: https://app.asana.com/0/0/${reklamationTaskGid}/f`,
-                  completed: false,
-                  parent: taskGid,
-                },
-              }),
-            }).catch((err) => console.error('Reklamations-Hinweis-Subtask fehlgeschlagen:', err))
-          }
-        } else {
-          console.error('Reklamations-Task fehlgeschlagen:', await reklaRes.text())
-        }
-      }
-    } catch (err) {
-      console.error('Reklamation fehlgeschlagen (non-fatal):', err)
-    }
-  }
-
     auditLog({
       event: 'submit',
       status: 'success',
@@ -286,7 +217,7 @@ export async function POST(request: Request) {
       retourenNr: hasExistingRetoure ? retourenNr : null,
       invoiceOverdue: !!body.order.invoiceDateWarning,
     })
-    return apiJson(successResponse({ taskId: taskGid, reklamationPdf: reklamationPdfBase64 }))
+    return apiJson(successResponse({ taskId: taskGid }))
   } catch (error) {
     if (error instanceof z.ZodError) {
       auditLog({ event: 'submit', status: 'failure', ip, reason: 'invalid_input' })

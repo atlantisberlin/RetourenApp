@@ -44,7 +44,6 @@ export const ReturnItemSchema = z.object({
       sku: z.string().max(50).optional(),
     })
     .nullish(),
-  reklamation: z.boolean().optional(),
 })
 
 export const OrderItemSchema = z.object({
@@ -70,8 +69,6 @@ export const OrderSchema = z.object({
   orderNumber: z.string().max(50),
   customerNumber: z.string().max(50),
   customerName: z.string().max(200),
-  // Bestelldatum — wird für den Reklamationsschein (Kaufdatum) gebraucht
-  date: z.string().max(50).optional(),
   // leerer String, wenn im Shop keine E-Mail hinterlegt ist; null aus BQ
   customerEmail: z.union([z.string().email(), z.literal('')]).nullish(),
   // 200 Artikel deckt jede realistische Bestellung ab und begrenzt die
