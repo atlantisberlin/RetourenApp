@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { RueckstandTabContent } from '@/components/RueckstandTabContent'
 import { RetourenTabContent } from '@/components/RetourenTabContent'
 import { VersandTabContent } from '@/components/VersandTabContent'
 
@@ -19,9 +20,15 @@ function BackButton({ onClick }: { onClick: () => void }) {
   )
 }
 
+const TAB_META = {
+  rueckstand: { label: 'Rückstand', color: 'var(--gold-dark)', bg: 'var(--gold-bg)', border: 'var(--gold-border)' },
+  retouren: { label: 'Retouren', color: 'var(--blue)', bg: 'var(--blue-bg)', border: 'var(--blue-border)' },
+  versand: { label: 'Versand', color: 'var(--purple)', bg: 'var(--purple-bg)', border: 'var(--purple-border)' },
+} as const
+
 export default function StatistikScreen() {
   const router = useRouter()
-  const [tab, setTab] = useState<'retouren' | 'versand'>('retouren')
+  const [tab, setTab] = useState<'rueckstand' | 'retouren' | 'versand'>('rueckstand')
 
   return (
     <>
@@ -33,11 +40,9 @@ export default function StatistikScreen() {
 
       {/* Tab switcher */}
       <div style={{ padding: '12px 20px 0', display: 'flex', gap: 8 }}>
-        {(['retouren', 'versand'] as const).map((t) => {
+        {(['rueckstand', 'retouren', 'versand'] as const).map((t) => {
           const active = tab === t
-          const color = t === 'retouren' ? 'var(--blue)' : 'var(--purple)'
-          const bgActive = t === 'retouren' ? 'var(--blue-bg)' : 'var(--purple-bg)'
-          const borderActive = t === 'retouren' ? 'var(--blue-border)' : 'var(--purple-border)'
+          const meta = TAB_META[t]
           return (
             <button
               key={t}
@@ -45,19 +50,19 @@ export default function StatistikScreen() {
               style={{
                 all: 'unset', cursor: 'pointer',
                 padding: '8px 18px', borderRadius: 8, fontSize: 14, fontWeight: 500,
-                border: `1.5px solid ${active ? borderActive : 'var(--border)'}`,
-                background: active ? bgActive : 'var(--surface)',
-                color: active ? color : 'var(--text-3)',
+                border: `1.5px solid ${active ? meta.border : 'var(--border)'}`,
+                background: active ? meta.bg : 'var(--surface)',
+                color: active ? meta.color : 'var(--text-3)',
                 transition: 'all 0.12s',
               }}
             >
-              {t === 'retouren' ? 'Retouren' : 'Versand'}
+              {meta.label}
             </button>
           )
         })}
       </div>
 
-      {tab === 'retouren' ? <RetourenTabContent /> : <VersandTabContent />}
+      {tab === 'rueckstand' ? <RueckstandTabContent /> : tab === 'retouren' ? <RetourenTabContent /> : <VersandTabContent />}
     </>
   )
 }
