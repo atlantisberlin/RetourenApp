@@ -1,4 +1,4 @@
-import { getOperator, setOperator, clearOperator, refreshActivity } from '../operator'
+import { getOperator, setOperator, clearOperator, refreshActivity, isOperatorActive } from '../operator'
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -21,6 +21,11 @@ const localStorageMock = (() => {
 Object.defineProperty(window, 'localStorage', {
   value: localStorageMock,
 })
+
+// clearOperator() ruft clearSession(), das per fetch() ein Logout-Audit
+// absetzt — im Test nur mocken, damit der Aufruf nicht mit „fetch is not
+// defined" scheitert.
+global.fetch = jest.fn(() => Promise.resolve({ ok: true })) as unknown as typeof fetch
 
 describe('operator', () => {
   beforeEach(() => {
@@ -148,6 +153,37 @@ describe('operator', () => {
 
       // Should still be valid
       expect(getOperator()).toBe('Ute')
+    })
+  })
+
+  describe('isOperatorActive', () => {
+    it('should return false if no operator is set', () => {
+      expect(isOperatorActive()).toBe(false)
+    })
+
+    it('should return true for a freshly set operator', () => {
+      setOperator('Erik')
+
+      expect(isOperatorActive()).toBe(true)
+    })
+
+    it('should return false once the idle timeout is exceeded', () => {
+      setOperator('Josi')
+
+      jest.advanceTimersByTime(10 * 60 * 1000 + 1000)
+
+      expect(isOperatorActive()).toBe(false)
+    })
+
+    it('should NOT log the operator out (no side effect) when idle', () => {
+      setOperator('Ute')
+
+      jest.advanceTimersByTime(10 * 60 * 1000 + 1000)
+      isOperatorActive()
+
+      // Anders als getOperator() darf isOperatorActive() nichts abmelden.
+      expect(localStorage.getItem('operator_name')).toBe('Ute')
+      expect(localStorage.getItem('operator_ts')).toBeTruthy()
     })
   })
 })

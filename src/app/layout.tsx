@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { headers } from 'next/headers'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import SessionKeepAlive from '@/components/SessionKeepAlive'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -35,6 +36,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="de">
       <body className="app-shell">
+        <SessionKeepAlive />
         <ErrorBoundary>{children}</ErrorBoundary>
       </body>
     </html>
