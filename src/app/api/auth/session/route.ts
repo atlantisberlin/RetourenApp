@@ -38,6 +38,42 @@ export async function POST(request: Request) {
 }
 
 /**
+ * PUT /api/auth/session
+ * Stiller Token-Refresh: verlangt ein NOCH GÜLTIGES Token (kein Neu-Login über
+ * den Namen) und stellt dafür ein frisches 24h-Token aus. So läuft die Sitzung
+ * eines aktiv arbeitenden Mitarbeiters nicht mitten am Tag ab. Ist das Token
+ * bereits abgelaufen, schlägt die Prüfung fehl (401) und der Client führt über
+ * seinen 401-Handler zurück zum Mitarbeiter-Login.
+ */
+export async function PUT(request: Request) {
+  const ip = getClientIp(request)
+  const token = extractSessionToken(
+    request.headers.get('authorization') ?? undefined,
+    request.headers.get('cookie') ?? undefined
+  )
+  if (!token) {
+    return apiJson(errorResponse('Unauthorized: No session token'), 401)
+  }
+
+  const operatorName = await verifySessionToken(token)
+  if (!operatorName) {
+    return apiJson(errorResponse('Unauthorized: Invalid or expired session'), 401)
+  }
+
+  const newToken = await createSessionToken(operatorName)
+  auditLog({ event: 'token_refresh', status: 'success', operator: operatorName, ip })
+
+  return apiJson(
+    successResponse({
+      token: newToken,
+      expiresIn: '24h',
+      operatorName,
+    }),
+    200
+  )
+}
+
+/**
  * DELETE /api/auth/session
  * Logout: JWTs sind zustandslos, es gibt serverseitig nichts zu invalidieren —
  * dieser Aufruf dient nur dem Audit-Log
