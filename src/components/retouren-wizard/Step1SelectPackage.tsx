@@ -31,7 +31,7 @@ export function Step1SelectPackage({
     <div>
       <div style={{ marginBottom: 20 }}>
         <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Paket dokumentieren</h2>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', lineHeight: 1.5 }}>Fotos aufnehmen, bevor du das Paket öffnest.</p>
+        <p style={{ fontSize: 14, color: 'var(--text-3)', lineHeight: 1.5 }}>Fotos aufnehmen, bevor du das Paket öffnest. Beide Fotos sind Pflicht.</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 24 }}>
@@ -60,9 +60,11 @@ export function Step1SelectPackage({
               ) : (
                 <div style={{ color: 'var(--text-muted)' }}><CameraIcon size={28} /></div>
               )}
-              <div style={{ fontSize: 12, fontWeight: 500, color: hasPhotos ? 'var(--green)' : 'var(--text-2)', textAlign: 'center' }}>{label}</div>
+              <div style={{ fontSize: 12, fontWeight: 500, color: hasPhotos ? 'var(--green)' : 'var(--text-2)', textAlign: 'center' }}>
+                {label} <span style={{ color: 'var(--red)' }}>*</span>
+              </div>
               <div style={{ fontSize: 11, color: hasPhotos ? 'var(--green)' : 'var(--text-muted)' }}>
-                {hasPhotos ? `✓ ${photos.length} ${photos.length === 1 ? 'Foto' : 'Fotos'} · Weiteres +` : 'Foto aufnehmen'}
+                {hasPhotos ? `✓ ${photos.length} ${photos.length === 1 ? 'Foto' : 'Fotos'} · Weiteres +` : 'Foto aufnehmen (Pflicht)'}
               </div>
             </div>
           )

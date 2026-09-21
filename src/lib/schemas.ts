@@ -23,27 +23,49 @@ export const SessionCreateSchema = z.object({
     .regex(/^[a-zA-Z0-9äöüßÄÖÜ\s\-]+$/, 'Invalid characters in operator name'),
 })
 
-export const ReturnItemSchema = z.object({
-  itemId: z.string().min(1, 'Item ID required'),
-  returned: z.boolean(),
-  returnedQuantity: z.number().int().min(0, 'Quantity must be zero or more'),
-  condition: z.enum(['gut', 'beschaedigt', 'unvollstaendig', 'defekt'], {
-    error: 'Invalid condition',
-  }),
-  reason: z.enum(
-    ['gefaellt_nicht', 'falsch_geliefert', 'defekt_bei_ankunft', 'groesse_passt_nicht', 'beschaedigt_bei_lieferung', 'sonstiges'],
-    { error: 'Invalid reason' }
-  ),
-  resolution: z.enum(['erstattung', 'umtausch'], {
-    error: 'Invalid resolution',
-  }),
-  notes: z.string().max(500, 'Notes too long').optional(),
-  replacementProduct: z
-    .object({
-      name: z.string().max(200),
-      sku: z.string().max(50).optional(),
-    })
-    .nullish(),
+export const ReturnItemSchema = z
+  .object({
+    itemId: z.string().min(1, 'Item ID required'),
+    returned: z.boolean(),
+    returnedQuantity: z.number().int().min(0, 'Quantity must be zero or more'),
+    condition: z.enum(['gut', 'beschaedigt', 'unvollstaendig', 'defekt'], {
+      error: 'Invalid condition',
+    }),
+    reason: z.enum(
+      ['gefaellt_nicht', 'falsch_geliefert', 'defekt_bei_ankunft', 'groesse_passt_nicht', 'beschaedigt_bei_lieferung', 'sonstiges'],
+      { error: 'Invalid reason' }
+    ),
+    resolution: z.enum(['erstattung', 'umtausch'], {
+      error: 'Invalid resolution',
+    }),
+    notes: z.string().max(500, 'Notes too long').optional(),
+    replacementProduct: z
+      .object({
+        name: z.string().max(200),
+        sku: z.string().max(50).optional(),
+      })
+      .nullish(),
+  })
+  // Bei Umtausch ist ein vollständiger Umtausch-Artikel Pflicht (Name muss
+  // gesetzt sein) — spiegelt die Pflichtfeld-Validierung im Wizard serverseitig.
+  .superRefine((val, ctx) => {
+    if (val.returned && val.resolution === 'umtausch') {
+      if (!val.replacementProduct || !val.replacementProduct.name.trim()) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Umtausch-Artikel ist erforderlich',
+          path: ['replacementProduct'],
+        })
+      }
+    }
+  })
+
+export const ProductVariantsQuerySchema = z.object({
+  productId: z
+    .string()
+    .min(1, 'Product ID required')
+    .max(50, 'Product ID too long')
+    .regex(/^[0-9]+$/, 'Invalid product ID'),
 })
 
 export const OrderItemSchema = z.object({

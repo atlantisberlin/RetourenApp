@@ -52,11 +52,20 @@ type ArticleRowProps = {
   onRemovePhoto: (photoId: string) => void
 }
 
+type Variant = ReplacementProduct & { imageUrl?: string }
+
 export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition, onReason, onResolution, onReplacementProduct, onCapturePhoto, onRemovePhoto }: ArticleRowProps) {
   const [productQuery, setProductQuery] = React.useState('')
   const [productResults, setProductResults] = React.useState<ReplacementProduct[]>([])
   const [productSearching, setProductSearching] = React.useState(false)
   const productSearchTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Geschwister-Artikel (Slaves desselben Masters) zum gewählten Umtausch-Artikel
+  const [variants, setVariants] = React.useState<Variant[]>([])
+  const [variantsLoading, setVariantsLoading] = React.useState(false)
+  // Merkt sich die products_ids der bereits geladenen Master-Gruppe, damit beim
+  // Wechsel auf ein Geschwister nicht erneut geladen wird.
+  const variantGroupRef = React.useRef<Set<string>>(new Set())
 
   // Ausstehende Debounce-Suche abbrechen, wenn die Zeile verlassen/geschlossen wird
   React.useEffect(() => {
@@ -64,6 +73,46 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
       if (productSearchTimer.current) clearTimeout(productSearchTimer.current)
     }
   }, [])
+
+  // Sobald ein Umtausch-Artikel gewählt ist: in BigQuery prüfen, ob es ein
+  // Slave-Artikel mit Master ist, und in dem Fall die Geschwister laden.
+  const replacementId = article.replacementProduct?.productId
+  React.useEffect(() => {
+    // Kein Umtausch-Artikel gewählt: nichts laden. Veraltete Varianten bleiben
+    // im State, werden aber durch die JSX-Bedingung (article.replacementProduct)
+    // nicht angezeigt.
+    if (!replacementId) return
+    // Bereits geladene Gruppe (z.B. nach Klick auf ein Geschwister) nicht neu laden
+    if (variantGroupRef.current.has(replacementId)) return
+
+    let cancelled = false
+    setVariantsLoading(true)
+    ;(async () => {
+      try {
+        const data = await apiGet<{ hasMaster: boolean; siblings: Variant[] }>(
+          `/api/product-variants?productId=${encodeURIComponent(replacementId)}`
+        )
+        if (cancelled) return
+        const sibs = data.siblings ?? []
+        setVariants(sibs)
+        variantGroupRef.current = new Set([replacementId, ...sibs.map(s => s.productId)])
+      } catch {
+        if (!cancelled) {
+          setVariants([])
+          variantGroupRef.current = new Set([replacementId])
+        }
+      } finally {
+        if (!cancelled) setVariantsLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [replacementId])
+
+  const startProductSearch = () => {
+    onReplacementProduct(null)
+    setProductQuery('')
+    setProductResults([])
+  }
 
   const handleProductSearch = (q: string) => {
     setProductQuery(q)
@@ -120,7 +169,7 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             {article.orderedQty}× bestellt
-            {ret === true && article.condition && article.reason && article.resolution && !hasGutschrift && (
+            {ret === true && article.condition && article.reason && article.resolution && article.photos.length > 0 && (article.resolution !== 'umtausch' || article.replacementProduct) && !hasGutschrift && (
               <span style={{ color: 'var(--green)' }}>✓</span>
             )}
             {hasRetoure && (
@@ -250,18 +299,20 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
             </div>
           </div>
 
-          {/* Umtausch-Artikel suchen */}
+          {/* Umtausch-Artikel suchen (Pflichtfeld) */}
           {article.resolution === 'umtausch' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', width: 56, flexShrink: 0 }}>ARTIKEL</span>
+                <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', width: 56, flexShrink: 0 }}>
+                  ARTIKEL <span style={{ color: 'var(--red)' }}>*</span>
+                </span>
                 {article.replacementProduct ? (
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 7, background: 'var(--blue-bg)', border: '1.5px solid var(--blue-border)' }}>
                     <span style={{ flex: 1, fontSize: 13, color: 'var(--blue)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {article.replacementProduct.name}
                       {article.replacementProduct.sku && <span style={{ color: 'var(--text-muted)', marginLeft: 6, fontSize: 11 }}>{article.replacementProduct.sku}</span>}
                     </span>
-                    <button onClick={() => { onReplacementProduct(null); setProductQuery(''); setProductResults([]) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18, padding: '0 2px', lineHeight: 1 }}>×</button>
+                    <button onClick={startProductSearch} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18, padding: '0 2px', lineHeight: 1 }}>×</button>
                   </div>
                 ) : (
                   <input
@@ -273,6 +324,7 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
                   />
                 )}
               </div>
+
               {!article.replacementProduct && productResults.length > 0 && (
                 <div style={{ marginLeft: 66, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', overflow: 'hidden' }}>
                   {productResults.map(p => (
@@ -289,13 +341,61 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
                   {productSearching && <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>Suche …</div>}
                 </div>
               )}
+
+              {/* Geschwister-Varianten des gewählten Artikels (Slaves desselben Masters) */}
+              {article.replacementProduct && variantsLoading && (
+                <div style={{ marginLeft: 66, fontSize: 12, color: 'var(--text-muted)', padding: '2px 0' }}>Varianten werden geladen …</div>
+              )}
+              {article.replacementProduct && !variantsLoading && variants.length > 0 && (
+                <div style={{ marginLeft: 66, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
+                    VARIANTEN · richtige Variante wählen
+                  </div>
+                  <div style={{ borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', overflow: 'hidden' }}>
+                    {variants.map(v => {
+                      const selected = v.productId === article.replacementProduct?.productId
+                      return (
+                        <button
+                          key={v.productId}
+                          onClick={() => onReplacementProduct({ productId: v.productId, name: v.name, sku: v.sku, ean: v.ean })}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+                            padding: '8px 10px', border: 'none', borderBottom: '1px solid var(--border-2)',
+                            cursor: 'pointer', fontSize: 13,
+                            background: selected ? 'var(--blue-bg)' : 'var(--surface)',
+                          }}
+                        >
+                          <span style={{
+                            width: 14, height: 14, borderRadius: '50%', flexShrink: 0,
+                            border: `1.5px solid ${selected ? 'var(--blue)' : 'var(--border)'}`,
+                            background: selected ? 'var(--blue)' : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            {selected && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff' }} />}
+                          </span>
+                          <span style={{ flex: 1, minWidth: 0, color: selected ? 'var(--blue)' : 'var(--text)', fontWeight: selected ? 600 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {v.name}
+                            {v.sku && <span style={{ color: 'var(--text-muted)', marginLeft: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}>{v.sku}</span>}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <button
+                    onClick={startProductSearch}
+                    style={{ alignSelf: 'flex-start', padding: '6px 10px', borderRadius: 7, fontSize: 12, border: '1.5px dashed var(--border)', background: 'var(--surface)', color: 'var(--text-2)', cursor: 'pointer' }}
+                  >
+                    Anderer Artikel …
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
           {/* Fotos */}
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
             <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', width: 56, flexShrink: 0, paddingTop: 8 }}>
-              {article.photos.length > 1 ? 'FOTOS' : 'FOTO'}
+              {article.photos.length > 1 ? 'FOTOS' : 'FOTO'} <span style={{ color: 'var(--red)' }}>*</span>
             </span>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
               {article.photos.length > 0 && (
@@ -315,7 +415,7 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
                 </div>
               )}
               <button onClick={onCapturePhoto} style={{ padding: '7px 10px', borderRadius: 7, fontSize: 13, border: '1.5px dashed var(--border)', background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <CameraIcon size={14} /> {article.photos.length > 0 ? 'Weiteres Foto' : 'Foto aufnehmen (optional)'}
+                <CameraIcon size={14} /> {article.photos.length > 0 ? 'Weiteres Foto' : 'Foto aufnehmen (erforderlich)'}
               </button>
             </div>
           </div>

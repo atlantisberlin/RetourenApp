@@ -138,11 +138,23 @@ export default function RetourenWizard() {
     } catch { /* ignore */ }
   }, [step, trackingNumber, isDhlReturn, selectedOrder, articles, notes])
 
-  const isStep1Valid = trackingNumber.trim().length > 3
-  const isStep2Valid = selectedOrder !== null
+  // Fotos sind im gesamten Retourenprozess Pflicht: Adressetikett + Paket außen
+  // (Schritt 1), Retourenschein (Schritt 2) und mindestens ein Foto pro
+  // zurückgekommenem Artikel (Schritt 3).
+  const isStep1Valid = trackingNumber.trim().length > 3 &&
+    labelPhotos.length > 0 &&
+    exteriorPhotos.length > 0
+  const isStep2Valid = selectedOrder !== null && slipPhotos.length > 0
   const isStep3Valid = articles.length > 0 &&
     articles.every(a => a.returned !== null || !!a.existingGutschrift) &&
-    articles.filter(a => a.returned === true).every(a => a.condition !== null && a.reason !== null && a.resolution !== null)
+    articles.filter(a => a.returned === true).every(a =>
+      a.condition !== null &&
+      a.reason !== null &&
+      a.resolution !== null &&
+      a.photos.length > 0 &&
+      // Bei Umtausch muss ein Umtausch-Artikel gewählt sein
+      (a.resolution !== 'umtausch' || a.replacementProduct !== null)
+    )
   const isNextEnabled = step === 1 ? isStep1Valid : step === 2 ? isStep2Valid : step === 3 ? isStep3Valid : true
 
   const handleNext = () => {
