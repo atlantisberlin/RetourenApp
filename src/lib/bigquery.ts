@@ -450,29 +450,45 @@ export type ProductVariant = {
 // Produkt. Ist das übergebene Produkt ein Slave, wird zunächst sein Master
 // bestimmt; ist es selbst ein Master, werden dessen Slaves geliefert. Bei einem
 // eigenständigen Artikel (kein Master/Slave) ist die Liste leer.
-export async function getProductSiblings(
-  productId: string
-): Promise<{ hasMaster: boolean; siblings: ProductVariant[] }> {
+//
+// Wichtig: Die Master-/Slave-Verknüpfung liegt ausschließlich im geteilten
+// xanario_shop-Katalog. Die Bestellpositionen kommen aber aus den Shop-Datasets
+// (ATLOS/TSHOS), deren products_id einen ANDEREN ID-Raum nutzt. Stabiler
+// dataset-übergreifender Schlüssel ist das Artikelmodell (products_model = SKU).
+// Daher wird der Zielartikel über productId ODER model in xanario aufgelöst.
+export async function getProductSiblings(opts: {
+  productId?: string
+  model?: string
+}): Promise<{ hasMaster: boolean; siblings: ProductVariant[] }> {
   const bq = getClient()
   if (!bq) return { hasMaster: false, siblings: [] }
 
-  const id = productId.trim()
-  if (!id) return { hasMaster: false, siblings: [] }
+  const id = (opts.productId ?? '').trim()
+  const model = (opts.model ?? '').trim()
+  if (!id && !model) return { hasMaster: false, siblings: [] }
 
   const [rows] = await bq.query({
     query: `
-      WITH master AS (
-        -- Produkt ist ein Slave -> zugehöriger Master
-        SELECT products_attributes_options_id AS master_id
-        FROM ${xTable(T_XANARIO_ATTR_OPTIONS)}
-        WHERE products_id = @id
+      WITH target AS (
+        -- Zielartikel in xanario über products_id ODER products_model auflösen
+        SELECT products_id
+        FROM ${xTable(T_XANARIO_PRODUCTS)}
+        WHERE (@id != '' AND products_id = @id)
+           OR (@model != '' AND products_model = @model)
+        LIMIT 1
+      ),
+      master AS (
+        -- Zielartikel ist ein Slave -> zugehöriger Master
+        SELECT o.products_attributes_options_id AS master_id
+        FROM ${xTable(T_XANARIO_ATTR_OPTIONS)} o
+        JOIN target t ON o.products_id = t.products_id
         UNION ALL
-        -- Produkt ist selbst ein Master -> eigene ID
-        SELECT @id AS master_id
-        FROM (SELECT 1) x
+        -- Zielartikel ist selbst ein Master -> eigene ID
+        SELECT t.products_id AS master_id
+        FROM target t
         WHERE EXISTS (
           SELECT 1 FROM ${xTable(T_XANARIO_ATTR_OPTIONS)}
-          WHERE products_attributes_options_id = @id
+          WHERE products_attributes_options_id = t.products_id
         )
       )
       SELECT
@@ -494,7 +510,7 @@ export async function getProductSiblings(
       ) pd ON p.products_id = pd.products_id
       ORDER BY SAFE_CAST(o.sort_order AS INT64)
     `,
-    params: { id },
+    params: { id, model },
   })
 
   const siblings = (rows as {

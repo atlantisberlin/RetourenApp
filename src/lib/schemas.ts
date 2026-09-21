@@ -60,13 +60,20 @@ export const ReturnItemSchema = z
     }
   })
 
-export const ProductVariantsQuerySchema = z.object({
-  productId: z
-    .string()
-    .min(1, 'Product ID required')
-    .max(50, 'Product ID too long')
-    .regex(/^[0-9]+$/, 'Invalid product ID'),
-})
+export const ProductVariantsQuerySchema = z
+  .object({
+    // Zielartikel wird über productId ODER model (products_model/SKU) aufgelöst.
+    productId: z
+      .string()
+      .max(50, 'Product ID too long')
+      .regex(/^[0-9]*$/, 'Invalid product ID')
+      .optional(),
+    model: z.string().max(100, 'Model too long').optional(),
+  })
+  .refine(
+    (v) => (v.productId?.trim().length ?? 0) > 0 || (v.model?.trim().length ?? 0) > 0,
+    { message: 'productId oder model erforderlich' }
+  )
 
 export const OrderItemSchema = z.object({
   id: z.string().max(50),

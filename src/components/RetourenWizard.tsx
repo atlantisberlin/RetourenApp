@@ -97,6 +97,7 @@ export default function RetourenWizard() {
     const rebuilt = selectedOrder.items.map((item: OrderItem) => ({
       itemId: item.id,
       productName: item.productName,
+      sku: item.sku,
       imageUrl: item.imageUrl,
       orderedQty: item.quantity,
       returned: null as boolean | null,
