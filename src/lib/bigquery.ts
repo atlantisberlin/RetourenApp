@@ -434,6 +434,102 @@ export async function searchOrders(query: string): Promise<Order[]> {
 
 const T_XANARIO_PRODUCTS = process.env.BQ_TABLE_XANARIO_PRODUCTS ?? 'shop_products'
 const T_XANARIO_PRODUCTS_DESC = process.env.BQ_TABLE_XANARIO_PRODUCTS_DESC ?? 'shop_products_description'
+// Master-/Slave-Zuordnung: products_attributes_options_id = Master-products_id,
+// products_id = Slave-products_id (eine Zeile pro Slave/Variante).
+const T_XANARIO_ATTR_OPTIONS = process.env.BQ_TABLE_XANARIO_ATTRIBUTES_OPTIONS ?? 'shop_products_attributes_options'
+
+export type ProductVariant = {
+  productId: string
+  name: string
+  sku?: string
+  ean?: string
+  imageUrl?: string
+}
+
+// Ermittelt die Geschwister-Artikel (alle Slaves desselben Masters) zu einem
+// Produkt. Ist das übergebene Produkt ein Slave, wird zunächst sein Master
+// bestimmt; ist es selbst ein Master, werden dessen Slaves geliefert. Bei einem
+// eigenständigen Artikel (kein Master/Slave) ist die Liste leer.
+//
+// Wichtig: Die Master-/Slave-Verknüpfung liegt ausschließlich im geteilten
+// xanario_shop-Katalog. Die Bestellpositionen kommen aber aus den Shop-Datasets
+// (ATLOS/TSHOS), deren products_id einen ANDEREN ID-Raum nutzt. Stabiler
+// dataset-übergreifender Schlüssel ist das Artikelmodell (products_model = SKU).
+// Daher wird der Zielartikel über productId ODER model in xanario aufgelöst.
+export async function getProductSiblings(opts: {
+  productId?: string
+  model?: string
+}): Promise<{ hasMaster: boolean; siblings: ProductVariant[] }> {
+  const bq = getClient()
+  if (!bq) return { hasMaster: false, siblings: [] }
+
+  const id = (opts.productId ?? '').trim()
+  const model = (opts.model ?? '').trim()
+  if (!id && !model) return { hasMaster: false, siblings: [] }
+
+  const [rows] = await bq.query({
+    query: `
+      WITH target AS (
+        -- Zielartikel in xanario über products_id ODER products_model auflösen
+        SELECT products_id
+        FROM ${xTable(T_XANARIO_PRODUCTS)}
+        WHERE (@id != '' AND products_id = @id)
+           OR (@model != '' AND products_model = @model)
+        LIMIT 1
+      ),
+      master AS (
+        -- Zielartikel ist ein Slave -> zugehöriger Master
+        SELECT o.products_attributes_options_id AS master_id
+        FROM ${xTable(T_XANARIO_ATTR_OPTIONS)} o
+        JOIN target t ON o.products_id = t.products_id
+        UNION ALL
+        -- Zielartikel ist selbst ein Master -> eigene ID
+        SELECT t.products_id AS master_id
+        FROM target t
+        WHERE EXISTS (
+          SELECT 1 FROM ${xTable(T_XANARIO_ATTR_OPTIONS)}
+          WHERE products_attributes_options_id = t.products_id
+        )
+      )
+      SELECT
+        p.products_id,
+        pd.products_name,
+        p.products_model,
+        p.sku,
+        p.products_ean,
+        p.products_image,
+        o.sort_order
+      FROM ${xTable(T_XANARIO_ATTR_OPTIONS)} o
+      JOIN (SELECT master_id FROM master LIMIT 1) m
+        ON o.products_attributes_options_id = m.master_id
+      JOIN ${xTable(T_XANARIO_PRODUCTS)} p ON o.products_id = p.products_id
+      LEFT JOIN (
+        SELECT products_id, ANY_VALUE(products_name) AS products_name
+        FROM ${xTable(T_XANARIO_PRODUCTS_DESC)}
+        GROUP BY products_id
+      ) pd ON p.products_id = pd.products_id
+      ORDER BY SAFE_CAST(o.sort_order AS INT64)
+    `,
+    params: { id, model },
+  })
+
+  const siblings = (rows as {
+    products_id: string
+    products_name?: string
+    products_model?: string
+    sku?: string
+    products_ean?: string
+    products_image?: string
+  }[]).map((r) => ({
+    productId: String(r.products_id),
+    name: r.products_name ?? '—',
+    sku: r.products_model ?? r.sku ?? undefined,
+    ean: r.products_ean ?? undefined,
+    imageUrl: r.products_image ? IMAGE_BASE + r.products_image : undefined,
+  }))
+
+  return { hasMaster: siblings.length > 0, siblings }
+}
 
 export async function searchProducts(query: string): Promise<{ productId: string; name: string; sku?: string; ean?: string; imageUrl?: string }[]> {
   const bq = getClient()

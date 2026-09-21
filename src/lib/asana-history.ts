@@ -6,6 +6,31 @@ type AsanaTaskRaw = {
   created_at: string
   html_notes?: string | null
   notes?: string | null
+  name?: string
+  tags?: { name: string }[]
+}
+
+export type BacklogEntry = {
+  taskGid: string
+  orderNumber: string
+  customerName: string
+  source: string
+  originTags: string[]
+  createdAt: string
+  overdueInvoice: boolean
+  needsRetoure: boolean
+  needsGutschrift: boolean
+  needsUmtausch: boolean
+  isOpen: boolean
+  resolvedAt: string | null
+  firstProductName: string
+  itemCount: number
+}
+
+type AsanaSubtaskRaw = {
+  name: string
+  completed: boolean
+  completed_at: string | null
 }
 
 async function fetchAllProjectTasks(
@@ -35,6 +60,37 @@ async function fetchAllProjectTasks(
   }
 
   return tasks
+}
+
+// Asana bietet keinen Weg, Unteraufgaben direkt in der Projekt-Task-Liste
+// mitzuladen (opt_fields deckt das nicht ab) — pro Aufgabe ist ein eigener
+// Request an /tasks/{gid}/subtasks nötig. Begrenzte Parallelität hält das
+// im Rahmen von Asanas Rate-Limit, statt alle Requests gleichzeitig abzufeuern.
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let index = 0
+  async function worker() {
+    while (index < items.length) {
+      const i = index++
+      results[i] = await fn(items[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
+async function fetchSubtasks(taskGid: string, token: string): Promise<AsanaSubtaskRaw[]> {
+  const url = new URL(`https://app.asana.com/api/1.0/tasks/${taskGid}/subtasks`)
+  url.searchParams.set('opt_fields', 'name,completed,completed_at')
+  url.searchParams.set('limit', '20')
+
+  const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) {
+    console.error('Asana Unteraufgaben-Fetch fehlgeschlagen:', res.status, await res.text())
+    return []
+  }
+  const json = await res.json()
+  return json.data ?? []
 }
 
 function escapeRegExp(s: string): string {
@@ -142,6 +198,57 @@ function parseVersandTask(task: AsanaTaskRaw): VersandEntry | null {
   }
 }
 
+// Unteraufgaben-Namen, wie submit/route.ts sie anlegt (siehe dort) — nur
+// deren "completed"-Status entscheidet, ob eine Retoure noch offen ist.
+// "Paket angenommen" wird nicht geprüft: die existiert immer und ist beim
+// Anlegen bereits completed, blockiert also nie den Rückstand.
+const RETOURE_SUBTASK_RE = /^Retoure angelegt/
+const GUTSCHRIFT_SUBTASK_RE = /^Gutschrift geschrieben/
+const UMTAUSCH_SUBTASK_RE = /^Umtausch gemacht/
+
+function parseBacklogTask(task: AsanaTaskRaw, subtasks: AsanaSubtaskRaw[]): BacklogEntry | null {
+  const html = task.html_notes ?? ''
+  if (!html.includes('<li>')) return null
+
+  const items = extractItemLines(html).map(parseItemLine)
+  if (items.length === 0) return null
+
+  const findSub = (re: RegExp) => subtasks.find((s) => re.test(s.name))
+  const retoureSub = findSub(RETOURE_SUBTASK_RE)
+  const gutschriftSub = findSub(GUTSCHRIFT_SUBTASK_RE)
+  const umtauschSub = findSub(UMTAUSCH_SUBTASK_RE)
+  const actionable = [retoureSub, gutschriftSub, umtauschSub].filter((s): s is AsanaSubtaskRaw => !!s)
+
+  const isOpen = actionable.length === 0 || actionable.some((s) => !s.completed)
+  const resolvedAt = isOpen
+    ? null
+    : actionable.reduce<string | null>((latest, s) => {
+        if (!s.completed_at) return latest
+        if (!latest || new Date(s.completed_at) > new Date(latest)) return s.completed_at
+        return latest
+      }, null) ?? task.created_at
+
+  // Titel-Format aus submit/route.ts: "Retoure (Nr) - {source} - {date} - {tracking} - {kunde}"
+  const source = (task.name ?? '').split(' - ')[1] ?? ''
+
+  return {
+    taskGid: task.gid,
+    orderNumber: extractLi(html, 'Bestellnr.') ?? '',
+    customerName: extractLi(html, 'Kunde') ?? '',
+    source,
+    originTags: (task.tags ?? []).map((t) => t.name),
+    createdAt: task.created_at,
+    overdueInvoice: /Achtung: Rechnung vom/.test(html),
+    needsRetoure: !!retoureSub && !retoureSub.completed,
+    needsGutschrift: !!gutschriftSub && !gutschriftSub.completed,
+    needsUmtausch: !!umtauschSub && !umtauschSub.completed,
+    isOpen,
+    resolvedAt,
+    firstProductName: items[0]?.productName ?? '',
+    itemCount: items.length,
+  }
+}
+
 export function isAsanaHistoryConfigured(): boolean {
   return !!(process.env.ASANA_TOKEN?.trim() && process.env.ASANA_PROJECT_GID?.trim())
 }
@@ -160,6 +267,24 @@ export async function fetchRetourenHistory(): Promise<HistoryEntry[]> {
     .map(parseRetoureTask)
     .filter((e): e is HistoryEntry => e !== null)
     .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())
+}
+
+export async function fetchRetourenBacklog(): Promise<BacklogEntry[]> {
+  const token = process.env.ASANA_TOKEN?.trim()
+  const projectGid = process.env.ASANA_PROJECT_GID?.trim()
+  if (!token || !projectGid) return []
+
+  const tasks = await fetchAllProjectTasks(projectGid, token, 'name,html_notes,created_at,tags.name')
+  const candidates = tasks.filter((t) => (t.html_notes ?? '').includes('<li>'))
+
+  const entries = await mapWithConcurrency(candidates, 8, async (task) => {
+    const subtasks = await fetchSubtasks(task.gid, token)
+    return parseBacklogTask(task, subtasks)
+  })
+
+  return entries
+    .filter((e): e is BacklogEntry => e !== null)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
 
 export async function fetchVersandHistory(): Promise<VersandEntry[]> {

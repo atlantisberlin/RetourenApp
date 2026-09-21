@@ -11,6 +11,9 @@ type Photo = { id: string; dataUrl: string; name: string; type: string }
 export type ArticleCapture = {
   itemId: string
   productName: string
+  // products_model / SKU des zurückgeschickten Artikels — dataset-übergreifender
+  // Schlüssel für die Geschwister-Suche (Master/Slave) im xanario-Katalog.
+  sku?: string
   imageUrl?: string
   orderedQty: number
   returned: boolean | null
@@ -52,11 +55,22 @@ type ArticleRowProps = {
   onRemovePhoto: (photoId: string) => void
 }
 
+type Variant = ReplacementProduct & { imageUrl?: string }
+
 export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition, onReason, onResolution, onReplacementProduct, onCapturePhoto, onRemovePhoto }: ArticleRowProps) {
   const [productQuery, setProductQuery] = React.useState('')
   const [productResults, setProductResults] = React.useState<ReplacementProduct[]>([])
   const [productSearching, setProductSearching] = React.useState(false)
   const productSearchTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Geschwister-Artikel (andere Varianten/Größen) des ZURÜCKGESCHICKTEN Artikels.
+  // Werden geladen, sobald "Umtausch" gewählt ist, damit man direkt die richtige
+  // Umtauschgröße auswählen kann.
+  const [siblings, setSiblings] = React.useState<Variant[]>([])
+  const [siblingsLoading, setSiblingsLoading] = React.useState(false)
+  const [showSearch, setShowSearch] = React.useState(false)
+  // Modell, für das bereits geladen wurde — verhindert erneutes Laden.
+  const siblingsFetchRef = React.useRef<string | null>(null)
 
   // Ausstehende Debounce-Suche abbrechen, wenn die Zeile verlassen/geschlossen wird
   React.useEffect(() => {
@@ -64,6 +78,46 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
       if (productSearchTimer.current) clearTimeout(productSearchTimer.current)
     }
   }, [])
+
+  // Sobald "Umtausch" aktiv ist: in BigQuery prüfen, ob der zurückgeschickte
+  // Artikel ein Slave ist (Master + Geschwister) und die Geschwister laden.
+  const isUmtausch = article.resolution === 'umtausch'
+  const returnedModel = article.sku ?? ''
+  React.useEffect(() => {
+    if (!isUmtausch || !returnedModel) return
+    if (siblingsFetchRef.current === returnedModel) return
+    siblingsFetchRef.current = returnedModel
+
+    let cancelled = false
+    setSiblingsLoading(true)
+    ;(async () => {
+      try {
+        const data = await apiGet<{ hasMaster: boolean; siblings: Variant[] }>(
+          `/api/product-variants?model=${encodeURIComponent(returnedModel)}`
+        )
+        if (!cancelled) setSiblings(data.siblings ?? [])
+      } catch {
+        if (!cancelled) setSiblings([])
+      } finally {
+        if (!cancelled) setSiblingsLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [isUmtausch, returnedModel])
+
+  const selectSibling = (v: Variant) => {
+    onReplacementProduct({ productId: v.productId, name: v.name, sku: v.sku, ean: v.ean })
+    setShowSearch(false)
+    setProductQuery('')
+    setProductResults([])
+  }
+
+  const clearReplacement = () => {
+    onReplacementProduct(null)
+    setShowSearch(false)
+    setProductQuery('')
+    setProductResults([])
+  }
 
   const handleProductSearch = (q: string) => {
     setProductQuery(q)
@@ -120,7 +174,7 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             {article.orderedQty}× bestellt
-            {ret === true && article.condition && article.reason && article.resolution && !hasGutschrift && (
+            {ret === true && article.condition && article.reason && article.resolution && article.photos.length > 0 && (article.resolution !== 'umtausch' || article.replacementProduct) && !hasGutschrift && (
               <span style={{ color: 'var(--green)' }}>✓</span>
             )}
             {hasRetoure && (
@@ -250,52 +304,122 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
             </div>
           </div>
 
-          {/* Umtausch-Artikel suchen */}
-          {article.resolution === 'umtausch' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', width: 56, flexShrink: 0 }}>ARTIKEL</span>
-                {article.replacementProduct ? (
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 7, background: 'var(--blue-bg)', border: '1.5px solid var(--blue-border)' }}>
-                    <span style={{ flex: 1, fontSize: 13, color: 'var(--blue)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {article.replacementProduct.name}
-                      {article.replacementProduct.sku && <span style={{ color: 'var(--text-muted)', marginLeft: 6, fontSize: 11 }}>{article.replacementProduct.sku}</span>}
+          {/* Umtausch-Artikel (Pflichtfeld) — Geschwister des zurückgeschickten
+              Artikels anzeigen, alternativ frei nach allen Artikeln suchen */}
+          {article.resolution === 'umtausch' && (() => {
+            const searchOpen = showSearch || siblings.length === 0
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', width: 56, flexShrink: 0 }}>
+                    ARTIKEL <span style={{ color: 'var(--red)' }}>*</span>
+                  </span>
+                  {article.replacementProduct ? (
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 7, background: 'var(--blue-bg)', border: '1.5px solid var(--blue-border)' }}>
+                      <span style={{ flex: 1, fontSize: 13, color: 'var(--blue)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {article.replacementProduct.name}
+                        {article.replacementProduct.sku && <span style={{ color: 'var(--text-muted)', marginLeft: 6, fontSize: 11 }}>{article.replacementProduct.sku}</span>}
+                      </span>
+                      <button onClick={clearReplacement} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18, padding: '0 2px', lineHeight: 1 }}>×</button>
+                    </div>
+                  ) : (
+                    <span style={{ flex: 1, fontSize: 12, color: 'var(--text-muted)' }}>
+                      {siblings.length > 0 ? 'Umtauschgröße wählen oder anderen Artikel suchen' : 'Artikel für den Umtausch wählen'}
                     </span>
-                    <button onClick={() => { onReplacementProduct(null); setProductQuery(''); setProductResults([]) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18, padding: '0 2px', lineHeight: 1 }}>×</button>
+                  )}
+                </div>
+
+                {siblingsLoading && (
+                  <div style={{ marginLeft: 66, fontSize: 12, color: 'var(--text-muted)', padding: '2px 0' }}>Varianten werden geladen …</div>
+                )}
+
+                {/* Geschwister-Varianten des zurückgeschickten Artikels */}
+                {!siblingsLoading && siblings.length > 0 && (
+                  <div style={{ marginLeft: 66, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
+                      VARIANTEN · Umtauschgröße wählen
+                    </div>
+                    <div style={{ borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', overflow: 'hidden' }}>
+                      {siblings.map(v => {
+                        const selected = v.productId === article.replacementProduct?.productId
+                        return (
+                          <button
+                            key={v.productId}
+                            onClick={() => selectSibling(v)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+                              padding: '8px 10px', border: 'none', borderBottom: '1px solid var(--border-2)',
+                              cursor: 'pointer', fontSize: 13,
+                              background: selected ? 'var(--blue-bg)' : 'var(--surface)',
+                            }}
+                          >
+                            <span style={{
+                              width: 14, height: 14, borderRadius: '50%', flexShrink: 0,
+                              border: `1.5px solid ${selected ? 'var(--blue)' : 'var(--border)'}`,
+                              background: selected ? 'var(--blue)' : 'transparent',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                              {selected && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff' }} />}
+                            </span>
+                            <span style={{ flex: 1, minWidth: 0, color: selected ? 'var(--blue)' : 'var(--text)', fontWeight: selected ? 600 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {v.name}
+                              {v.sku && <span style={{ color: 'var(--text-muted)', marginLeft: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}>{v.sku}</span>}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Freie Suche über alle Artikel ("Anderer Artikel") */}
+                {searchOpen ? (
+                  <div style={{ marginLeft: 66, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {siblings.length > 0 && (
+                      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
+                        ANDERER ARTIKEL · alle Artikel durchsuchen
+                      </div>
+                    )}
+                    <input
+                      type="text"
+                      placeholder="Artikelname, SKU oder EAN …"
+                      value={productQuery}
+                      onChange={e => handleProductSearch(e.target.value)}
+                      style={{ padding: '7px 10px', borderRadius: 7, fontSize: 13, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', outline: 'none', fontFamily: 'var(--font-sans)' }}
+                    />
+                    {productResults.length > 0 && (
+                      <div style={{ borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', overflow: 'hidden' }}>
+                        {productResults.map(p => (
+                          <button
+                            key={p.productId}
+                            onClick={() => { onReplacementProduct(p); setProductQuery(''); setProductResults([]) }}
+                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', background: 'none', border: 'none', borderBottom: '1px solid var(--border-2)', cursor: 'pointer', fontSize: 13 }}
+                          >
+                            <span style={{ fontWeight: 500, color: 'var(--text)' }}>{p.name}</span>
+                            {p.sku && <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 11, fontFamily: 'var(--font-mono)' }}>{p.sku}</span>}
+                            {p.ean && <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 11, fontFamily: 'var(--font-mono)' }}>{p.ean}</span>}
+                          </button>
+                        ))}
+                        {productSearching && <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>Suche …</div>}
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <input
-                    type="text"
-                    placeholder="Artikelname, SKU oder EAN …"
-                    value={productQuery}
-                    onChange={e => handleProductSearch(e.target.value)}
-                    style={{ flex: 1, padding: '7px 10px', borderRadius: 7, fontSize: 13, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', outline: 'none', fontFamily: 'var(--font-sans)' }}
-                  />
+                  <button
+                    onClick={() => setShowSearch(true)}
+                    style={{ marginLeft: 66, alignSelf: 'flex-start', padding: '6px 10px', borderRadius: 7, fontSize: 12, border: '1.5px dashed var(--border)', background: 'var(--surface)', color: 'var(--text-2)', cursor: 'pointer' }}
+                  >
+                    Anderer Artikel …
+                  </button>
                 )}
               </div>
-              {!article.replacementProduct && productResults.length > 0 && (
-                <div style={{ marginLeft: 66, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', overflow: 'hidden' }}>
-                  {productResults.map(p => (
-                    <button
-                      key={p.productId}
-                      onClick={() => { onReplacementProduct(p); setProductQuery(''); setProductResults([]) }}
-                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', background: 'none', border: 'none', borderBottom: '1px solid var(--border-2)', cursor: 'pointer', fontSize: 13 }}
-                    >
-                      <span style={{ fontWeight: 500, color: 'var(--text)' }}>{p.name}</span>
-                      {p.sku && <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 11, fontFamily: 'var(--font-mono)' }}>{p.sku}</span>}
-                      {p.ean && <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 11, fontFamily: 'var(--font-mono)' }}>{p.ean}</span>}
-                    </button>
-                  ))}
-                  {productSearching && <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>Suche …</div>}
-                </div>
-              )}
-            </div>
-          )}
+            )
+          })()}
 
           {/* Fotos */}
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
             <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.06em', width: 56, flexShrink: 0, paddingTop: 8 }}>
-              {article.photos.length > 1 ? 'FOTOS' : 'FOTO'}
+              {article.photos.length > 1 ? 'FOTOS' : 'FOTO'} <span style={{ color: 'var(--red)' }}>*</span>
             </span>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
               {article.photos.length > 0 && (
@@ -315,7 +439,7 @@ export function ArticleRow({ article, onToggleReturned, onQuantity, onCondition,
                 </div>
               )}
               <button onClick={onCapturePhoto} style={{ padding: '7px 10px', borderRadius: 7, fontSize: 13, border: '1.5px dashed var(--border)', background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <CameraIcon size={14} /> {article.photos.length > 0 ? 'Weiteres Foto' : 'Foto aufnehmen (optional)'}
+                <CameraIcon size={14} /> {article.photos.length > 0 ? 'Weiteres Foto' : 'Foto aufnehmen (erforderlich)'}
               </button>
             </div>
           </div>

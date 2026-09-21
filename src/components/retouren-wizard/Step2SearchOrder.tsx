@@ -47,12 +47,12 @@ export function Step2SearchOrder({
           )}
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)', marginBottom: 2 }}>
-              {slipPhotos.length > 1 ? 'Retourenscheine' : 'Retourenschein'}
+              {slipPhotos.length > 1 ? 'Retourenscheine' : 'Retourenschein'} <span style={{ color: 'var(--red)' }}>*</span>
             </div>
             <div style={{ fontSize: 12, color: slipPhotos.length > 0 ? 'var(--green)' : 'var(--text-muted)' }}>
               {slipPhotos.length > 0
                 ? `✓ ${slipPhotos.length} ${slipPhotos.length === 1 ? 'Foto' : 'Fotos'} · Weiteres hinzufügen +`
-                : 'Lieferschein oder Retourenzettel fotografieren'}
+                : 'Lieferschein oder Retourenzettel fotografieren (Pflicht)'}
             </div>
           </div>
         </div>
